@@ -1,0 +1,69 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+.venv
+
+# Airflow
+airflow.db
+airflow.cfg
+airflow-webserver.pid
+logs/
+airflow-home/
+webserver_config.py
+standalone_admin_password.txt
+
+# DuckDB
+*.duckdb
+*.duckdb.wal
+data/duckdb/*.db
+data/duckdb/*.duckdb
+
+# dbt
+dbt_project/target/
+dbt_project/dbt_packages/
+dbt_project/logs/
+
+# Data files
+data/raw/*.csv
+data/raw/*.json
+data/exports/*.csv
+data/exports/*.parquet
+data/extended_history/*.json
+
+# Spotify authentication
+.env
+.spotify_cache
+data/.spotify_cache
+*.cache
+scripts/authenticate_spotify.py
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Docker
+*.log
+
+# Sensitive files
+.env.local
+.env.production
+secrets/
+credentials/
+
+# markdown files
+AUTHENTICATION_SETUP.md
+OPENLINEAGE_MARQUEZ_SETUP.md
+HISTORICAL_DATA_GUIDE.md
+PLAYLIST_INTEGRATION.md
+QUICKSTART.md
+TROUBLESHOOTING.md
+VIEWING_LINEAGE.md

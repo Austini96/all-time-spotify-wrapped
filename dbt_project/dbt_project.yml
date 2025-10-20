@@ -1,0 +1,35 @@
+name: 'spotify_analytics'
+version: '1.0.0'
+config-version: 2
+
+profile: 'spotify'
+
+model-paths: ["models"]
+analysis-paths: ["analyses"]
+test-paths: ["tests"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+snapshot-paths: ["snapshots"]
+
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+models:
+  spotify_analytics:
+    # persist_docs not supported by DuckDB adapter
+    # +persist_docs:
+    #   relation: true
+    #   columns: true
+    staging:
+      +materialized: view
+      +schema: staging
+    marts:
+      +materialized: table
+      +schema: marts
+    analytics:
+      +materialized: table
+      +schema: analytics
+
+vars:
+  min_play_duration_ms: 30000  # 30 seconds

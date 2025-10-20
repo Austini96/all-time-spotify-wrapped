@@ -1,0 +1,10 @@
+spotify:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: /opt/airflow/data/duckdb/spotify.duckdb
+      threads: 4
+      extensions:
+        - httpfs
+        - parquet

@@ -1,0 +1,53 @@
+version: 2
+
+models:
+  - name: fct_listening_history
+    description: "Fact table containing all listening events with enriched data"
+    columns:
+      - name: play_id
+        description: "Unique identifier for each play event"
+        tests:
+          - unique
+          - not_null
+
+  - name: dim_tracks
+    description: "Dimension table for tracks with audio features and statistics"
+    columns:
+      - name: track_id
+        description: "Spotify track ID"
+        tests:
+          - unique
+          - not_null
+
+  - name: dim_artists
+    description: "Dimension table for artists with statistics"
+    columns:
+      - name: artist_id
+        description: "Spotify artist ID"
+        tests:
+          - unique
+          - not_null
+
+  - name: dim_albums
+    description: "Dimension table for albums with statistics"
+    columns:
+      - name: album_id
+        description: "Spotify album ID"
+        tests:
+          - unique
+          - not_null
+
+  - name: dim_playlists
+    description: "Dimension table for playlists with track counts and statistics"
+    columns:
+      - name: playlist_id
+        description: "Spotify playlist ID"
+        tests:
+          - unique
+          - not_null
+      - name: playlist_name
+        description: "Name of the playlist"
+      - name: is_owner
+        description: "Whether the user owns this playlist"
+      - name: actual_track_count
+        description: "Actual number of tracks loaded from the playlist"

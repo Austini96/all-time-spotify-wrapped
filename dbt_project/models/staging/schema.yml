@@ -1,0 +1,127 @@
+version: 2
+
+sources:
+  - name: spotify
+    description: "Raw Spotify data loaded into DuckDB"
+    database: spotify
+    schema: main
+    tables:
+      - name: raw_spotify_tracks
+        description: "Raw track play history from Spotify API"
+      - name: raw_spotify_audio_features
+        description: "Raw audio features from Spotify API"
+      - name: raw_spotify_artists
+        description: "Raw artist information from Spotify API"
+      - name: raw_spotify_playlists
+        description: "Raw playlist information from Spotify API"
+      - name: raw_spotify_playlist_tracks
+        description: "Raw playlist-track relationships from Spotify API"
+      - name: raw_spotify_extended_history
+        description: "Extended streaming history from Spotify data export (2+ years)"
+
+models:
+  - name: stg_spotify_tracks
+    description: "Staging model for Spotify tracks with deduplication and date parsing"
+    columns:
+      - name: play_id
+        description: "Unique identifier for each play event"
+        tests:
+          - unique
+          - not_null
+      - name: played_at
+        description: "Timestamp when the track was played"
+        tests:
+          - not_null
+      - name: track_id
+        description: "Spotify track ID"
+        tests:
+          - not_null
+      - name: duration_ms
+        description: "Track duration in milliseconds"
+        tests:
+          - not_null
+
+  - name: stg_spotify_audio_features
+    description: "Staging model for Spotify audio features"
+    columns:
+      - name: track_id
+        description: "Spotify track ID"
+        tests:
+          - unique
+          - not_null
+      - name: valence
+        description: "Musical positiveness (0.0 to 1.0)"
+      - name: energy
+        description: "Intensity and activity (0.0 to 1.0)"
+
+  - name: stg_spotify_artists
+    description: "Staging model for Spotify artists"
+    columns:
+      - name: artist_id
+        description: "Spotify artist ID"
+        tests:
+          - unique
+          - not_null
+
+  - name: stg_spotify_playlists
+    description: "Staging model for Spotify playlists"
+    columns:
+      - name: playlist_id
+        description: "Spotify playlist ID"
+        tests:
+          - unique
+          - not_null
+      - name: playlist_name
+        description: "Name of the playlist"
+      - name: is_owner
+        description: "Whether the user owns this playlist"
+      - name: total_tracks
+        description: "Total number of tracks in the playlist"
+
+  - name: stg_spotify_playlist_tracks
+    description: "Staging model for playlist-track relationships"
+    columns:
+      - name: playlist_id
+        description: "Spotify playlist ID"
+        tests:
+          - not_null
+      - name: track_id
+        description: "Spotify track ID"
+        tests:
+          - not_null
+      - name: added_at
+        description: "When the track was added to the playlist"
+      - name: position
+        description: "Position of track in the playlist"
+
+  - name: stg_spotify_extended_history
+    description: "Staging model for Spotify extended history of playlists"
+    columns:
+      - name: played_at
+        description: "Timestamp of the play event"
+        tests:
+          - not_null
+      - name: platform
+        description: "Platform of the play event"
+        tests:
+          - not_null
+      - name: ms_played
+        description: "Milliseconds played"
+        tests:
+          - not_null
+      - name: conn_country
+        description: "Country of the play event"
+        tests:
+          - not_null
+      - name: track_name
+        description: "Name of the track"
+        tests:
+          - not_null
+      - name: artist_name
+        description: "Name of the album artist"
+        tests:
+          - not_null
+      - name: album_name
+        description: "Name of the album"
+        tests:
+          - not_null

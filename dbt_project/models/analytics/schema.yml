@@ -1,0 +1,38 @@
+version: 2
+
+models:
+  - name: top_artists_daily
+    description: "Daily aggregation of top artists by play count"
+    
+  - name: top_tracks_daily
+    description: "Daily aggregation of top tracks by play count"
+    
+  - name: listening_patterns_hourly
+    description: "Hourly listening patterns with audio feature analysis"
+    
+  - name: audio_features_analysis
+    description: "Daily analysis of audio features and mood distribution"
+    
+  - name: playlist_analysis
+    description: "Comprehensive playlist analytics with play statistics and mood analysis"
+    columns:
+      - name: playlist_id
+        description: "Spotify playlist ID"
+      - name: playlist_name
+        description: "Name of the playlist"
+      - name: total_tracks
+        description: "Total number of tracks in the playlist"
+      - name: played_tracks
+        description: "Number of tracks from this playlist that have been played"
+      - name: played_percentage
+        description: "Percentage of playlist tracks that have been played"
+      - name: total_plays
+        description: "Total number of plays across all tracks in this playlist"
+      - name: avg_plays_per_track
+        description: "Average number of plays per track"
+      - name: playlist_mood
+        description: "Overall mood category of the playlist (Happy & Energetic, Happy & Calm, etc.)"
+      - name: avg_valence
+        description: "Average valence (positiveness) of tracks in the playlist"
+      - name: avg_energy
+        description: "Average energy level of tracks in the playlist"
