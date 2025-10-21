@@ -32,11 +32,11 @@ Deep dive into a my complete song listening history to analyze top artists, trac
 
 ## Architecture
 
-![](Architecture.png)
+![](/images/Architecture.png)
 
 ### Data Flow
 
-![Holistic View of Airflow Orchestration Pipeline](Airflow%20DAG.png)
+![Holistic View of Airflow Orchestration Pipeline](/images/Airflow%20DAG.png)
 
 #### 1. **Extraction**
 - **API Extraction** (`extract_spotify_data`):
@@ -64,7 +64,7 @@ Deep dive into a my complete song listening history to analyze top artists, trac
   3. `analytics`: analytical models from marts layer
 
 #### 4. **Lineage Tracking**
-![OpenLineage](Marquez%20Lineage.png)
+![OpenLineage](/images/Marquez%20Lineage.png)
 - **OpenLineage Integration** (`emit_lineage`):
   - Emits column-level lineage for all 16 dbt models
   - Tracks transformations from raw sources through staging to analytics
@@ -85,14 +85,14 @@ Deep dive into a my complete song listening history to analyze top artists, trac
 ## Dashboard & Insights
 
 ### Metabase Dashboard
-![](Metabase1.png)
-![](Metabase2.png)
-![](Metabase3.png)
+![](/images/Metabase1.png)
+![](/images/Metabase2.png)
+![](/images/Metabase3.png)
 
 
 ## Slack Notifications
 
-![](Slack%20Notification.png)
+![](/images/Slack%20Notification.png)
 The pipeline automatically sends Slack alerts for:
 - Task failures (after all retries exhausted)
 - Task retries (immediate notification)
