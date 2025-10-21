@@ -1,6 +1,7 @@
 """
 Spotify API data extraction module
 """
+
 import spotipy
 from spotipy.oauth2 import SpotifyOAuth
 import pandas as pd
@@ -13,18 +14,15 @@ logger = logging.getLogger(__name__)
 
 
 class SpotifyExtractor:
-    """Extract data from Spotify API"""
-    
+
     def __init__(self):
-        """Initialize Spotify client with OAuth"""
         client_id = os.getenv('SPOTIFY_CLIENT_ID')
         client_secret = os.getenv('SPOTIFY_CLIENT_SECRET')
         redirect_uri = os.getenv('SPOTIFY_REDIRECT_URI')
         
         if not client_id or not client_secret:
             raise ValueError(
-                "Missing Spotify credentials. Please set SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET "
-                "environment variables."
+                "Missing Spotify credentials."
             )
         
         cache_path = '/opt/airflow/data/.spotify_cache'
@@ -32,9 +30,7 @@ class SpotifyExtractor:
         # Check if cache exists
         if not os.path.exists(cache_path):
             logger.warning(
-                f"Spotify token cache not found at {cache_path}. "
-                "Please run 'python scripts/authenticate_spotify.py' locally to authenticate first, "
-                "then copy the .spotify_cache file to the data directory."
+                f"Spotify token cache not found at {cache_path}."
             )
         
         try:
@@ -53,24 +49,9 @@ class SpotifyExtractor:
             logger.info("Spotify client initialized and authenticated successfully")
         except Exception as e:
             logger.error(f"Failed to initialize Spotify client: {e}")
-            logger.error(
-                "If you see authentication errors, you need to:\n"
-                "1. Run 'python scripts/authenticate_spotify.py' locally\n"
-                "2. Copy the generated .spotify_cache file to the data directory\n"
-                "3. Restart the Airflow containers"
-            )
             raise
     
     def get_recently_played(self, limit=50):
-        """
-        Fetch recently played tracks
-        
-        Args:
-            limit: Maximum number of tracks to fetch (max 50)
-            
-        Returns:
-            DataFrame with track information
-        """
         try:
             results = self.sp.current_user_recently_played(limit=limit)
             tracks_data = []
@@ -103,15 +84,6 @@ class SpotifyExtractor:
             raise
     
     def get_audio_features(self, track_ids):
-        """
-        Get audio features for tracks
-        
-        Args:
-            track_ids: List of track IDs
-            
-        Returns:
-            DataFrame with audio features, or empty DataFrame if not available
-        """
         try:
             features = []
             # API allows max 100 tracks per request
@@ -126,13 +98,6 @@ class SpotifyExtractor:
             
         except Exception as e:
             logger.warning(f"Error fetching audio features: {e}")
-            logger.warning(
-                "Audio features endpoint returned 403 Forbidden. "
-                "This typically means:\n"
-                "  1. You need a Spotify Premium account to access audio features\n"
-                "  2. Or the endpoint is restricted in your region\n"
-                "Continuing without audio features..."
-            )
             # Return empty DataFrame with expected columns
             return pd.DataFrame(columns=[
                 'id', 'danceability', 'energy', 'key', 'loudness', 'mode',
@@ -141,15 +106,6 @@ class SpotifyExtractor:
             ])
     
     def get_artist_info(self, artist_ids):
-        """
-        Get detailed artist information
-        
-        Args:
-            artist_ids: List of artist IDs
-            
-        Returns:
-            DataFrame with artist information
-        """
         try:
             artists_data = []
             # API allows max 50 artists per request
@@ -173,19 +129,12 @@ class SpotifyExtractor:
             
         except Exception as e:
             logger.warning(f"Error fetching artist info: {e}")
-            logger.warning("Continuing without artist details...")
             # Return empty DataFrame with expected columns
             return pd.DataFrame(columns=[
                 'artist_id', 'artist_name', 'genres', 'popularity', 'followers'
             ])
     
     def get_user_playlists(self):
-        """
-        Get all user playlists with tracks
-        
-        Returns:
-            tuple: (playlists_df, playlist_tracks_df)
-        """
         try:
             playlists_data = []
             playlist_tracks_data = []
@@ -286,17 +235,6 @@ class SpotifyExtractor:
             )
     
     def save_to_csv(self, df, filename, output_dir='/opt/airflow/data/raw'):
-        """
-        Save DataFrame to CSV with timestamp
-        
-        Args:
-            df: DataFrame to save
-            filename: Base filename
-            output_dir: Output directory
-            
-        Returns:
-            Path to saved file
-        """
         os.makedirs(output_dir, exist_ok=True)
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         filepath = os.path.join(output_dir, f"{filename}_{timestamp}.csv")
@@ -307,7 +245,6 @@ class SpotifyExtractor:
 
 
 def extract_spotify_data():
-    """Main extraction function for Airflow task"""
     extractor = SpotifyExtractor()
     result = {}
     
@@ -318,7 +255,7 @@ def extract_spotify_data():
         # Save tracks
         tracks_file = extractor.save_to_csv(tracks_df, 'spotify_tracks')
         result['tracks_file'] = tracks_file
-        logger.info(f"✓ Saved {len(tracks_df)} tracks")
+        logger.info(f"Saved {len(tracks_df)} tracks")
         
         # Extract audio features (may return empty DataFrame if unavailable)
         track_ids = tracks_df['track_id'].unique().tolist()
@@ -326,9 +263,9 @@ def extract_spotify_data():
         if not features_df.empty:
             features_file = extractor.save_to_csv(features_df, 'spotify_audio_features')
             result['features_file'] = features_file
-            logger.info(f"✓ Saved {len(features_df)} audio features")
+            logger.info(f"Saved {len(features_df)} audio features")
         else:
-            logger.warning("⚠ Audio features not available (skipped)")
+            logger.warning("Audio features not available (skipped)")
             result['features_file'] = None
         
         # Extract artist information (may return empty DataFrame if unavailable)
@@ -337,9 +274,9 @@ def extract_spotify_data():
         if not artists_df.empty:
             artists_file = extractor.save_to_csv(artists_df, 'spotify_artists')
             result['artists_file'] = artists_file
-            logger.info(f"✓ Saved {len(artists_df)} artists")
+            logger.info(f"Saved {len(artists_df)} artists")
         else:
-            logger.warning("⚠ Artist info not available (skipped)")
+            logger.warning("Artist info not available (skipped)")
             result['artists_file'] = None
         
         # Extract playlist information
@@ -347,17 +284,17 @@ def extract_spotify_data():
         if not playlists_df.empty:
             playlists_file = extractor.save_to_csv(playlists_df, 'spotify_playlists')
             result['playlists_file'] = playlists_file
-            logger.info(f"✓ Saved {len(playlists_df)} playlists")
+            logger.info(f"Saved {len(playlists_df)} playlists")
         else:
-            logger.warning("⚠ Playlists not available (skipped)")
+            logger.warning("Playlists not available (skipped)")
             result['playlists_file'] = None
         
         if not playlist_tracks_df.empty:
             playlist_tracks_file = extractor.save_to_csv(playlist_tracks_df, 'spotify_playlist_tracks')
             result['playlist_tracks_file'] = playlist_tracks_file
-            logger.info(f"✓ Saved {len(playlist_tracks_df)} playlist-track relationships")
+            logger.info(f"Saved {len(playlist_tracks_df)} playlist-track relationships")
         else:
-            logger.warning("⚠ Playlist tracks not available (skipped)")
+            logger.warning("Playlist tracks not available (skipped)")
             result['playlist_tracks_file'] = None
         
         logger.info(f"Extraction complete: {sum(1 for v in result.values() if v)} of 5 data sources saved")

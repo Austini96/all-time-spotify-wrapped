@@ -15,7 +15,7 @@ class DuckDBLoader:
     """Load data into DuckDB warehouse"""
     
     def __init__(self, db_path='/opt/airflow/data/duckdb/spotify.duckdb'):
-        """Initialize DuckDB connection"""
+        #Initialize DuckDB connection
         os.makedirs(os.path.dirname(db_path), exist_ok=True)
         self.db_path = db_path
         self.conn = duckdb.connect(db_path)
@@ -23,8 +23,6 @@ class DuckDBLoader:
         self.init_tables()
     
     def init_tables(self):
-        """Create raw tables if they don't exist"""
-        
         # Raw tracks table
         self.conn.execute("""
             CREATE TABLE IF NOT EXISTS raw_spotify_tracks (
@@ -114,7 +112,6 @@ class DuckDBLoader:
         logger.info("Initialized raw tables (tracks, features, artists, playlists)")
     
     def load_tracks(self, csv_file):
-        """Load tracks from CSV"""
         try:
             # Get count before insert
             count_before = self.conn.execute("SELECT COUNT(*) FROM raw_spotify_tracks").fetchone()[0]
@@ -149,7 +146,6 @@ class DuckDBLoader:
             raise
     
     def load_audio_features(self, csv_file):
-        """Load audio features from CSV"""
         try:
             # Check if file has data
             row_count = self.conn.execute(f"SELECT COUNT(*) FROM read_csv_auto('{csv_file}')").fetchone()[0]
@@ -195,7 +191,6 @@ class DuckDBLoader:
             logger.warning("Continuing without audio features...")
     
     def load_artists(self, csv_file):
-        """Load artists from CSV"""
         try:
             # Check if file has data
             row_count = self.conn.execute(f"SELECT COUNT(*) FROM read_csv_auto('{csv_file}')").fetchone()[0]
@@ -234,7 +229,6 @@ class DuckDBLoader:
             logger.warning("Continuing without artist details...")
     
     def load_playlists(self, csv_file):
-        """Load playlists from CSV"""
         try:
             # Check if file is empty
             if os.path.getsize(csv_file) == 0:
@@ -282,7 +276,6 @@ class DuckDBLoader:
             raise
     
     def load_playlist_tracks(self, csv_file):
-        """Load playlist-track relationships from CSV"""
         try:
             # Check if file is empty
             if os.path.getsize(csv_file) == 0:
@@ -319,8 +312,6 @@ class DuckDBLoader:
             raise
     
     def load_latest_csv_files(self, data_dir='/opt/airflow/data/raw'):
-        """Load the most recent CSV files"""
-        
         # Find latest files
         track_files = sorted(glob.glob(f"{data_dir}/spotify_tracks_*.csv"))
         feature_files = sorted(glob.glob(f"{data_dir}/spotify_audio_features_*.csv"))
@@ -363,7 +354,6 @@ class DuckDBLoader:
         logger.info(f"Loaded {loaded_count} of 5 data types successfully")
     
     def get_stats(self):
-        """Get database statistics"""
         stats = {}
         
         stats['total_plays'] = self.conn.execute(
@@ -382,13 +372,11 @@ class DuckDBLoader:
         return stats
     
     def close(self):
-        """Close database connection"""
         self.conn.close()
         logger.info("Closed DuckDB connection")
 
 
 def load_to_duckdb():
-    """Main loading function for Airflow task"""
     loader = DuckDBLoader()
     loader.load_latest_csv_files()
     stats = loader.get_stats()

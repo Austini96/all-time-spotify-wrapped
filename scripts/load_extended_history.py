@@ -1,7 +1,7 @@
 """
 Load Spotify Extended Streaming History JSON files into DuckDB
-This provides much more historical data than the API (50 tracks limit)
 """
+
 import json
 import glob
 import os
@@ -14,8 +14,6 @@ logger = logging.getLogger(__name__)
 
 
 def load_extended_streaming_history():
-    """Load extended streaming history JSON files into DuckDB"""
-    
     # Paths
     extended_history_dir = '/opt/airflow/data/extended_history'
     duckdb_path = '/opt/airflow/data/duckdb/spotify.duckdb'
@@ -31,7 +29,7 @@ def load_extended_streaming_history():
         """).fetchone()
         
         if result and result[0] > 0:
-            logger.info(f"✓ Extended history already loaded ({result[0]:,} records)")
+            logger.info(f"Extended history already loaded ({result[0]:,} records)")
             logger.info("Skipping load - data already exists")
             conn.close()
             return
@@ -44,10 +42,6 @@ def load_extended_streaming_history():
     # Check if extended history directory exists
     if not os.path.exists(extended_history_dir):
         logger.warning(f"Extended history directory not found: {extended_history_dir}")
-        logger.info("To use extended history:")
-        logger.info("1. Request your data from Spotify (takes ~30 days)")
-        logger.info("2. Place JSON files in: data/extended_history/")
-        logger.info("3. Re-run this task")
         return
     
     # Find all JSON files
@@ -108,7 +102,7 @@ def load_extended_streaming_history():
                 if record.get('spotify_track_uri') and record['spotify_track_uri'].startswith('spotify:track:')
             ]
             
-            logger.info(f"  Found {len(data)} total records, {len(music_data)} music tracks")
+            logger.info(f"Found {len(data)} total records, {len(music_data)} music tracks")
             
             if not music_data:
                 continue
@@ -153,37 +147,15 @@ def load_extended_streaming_history():
                         record.get('incognito_mode')
                     ])
                 except Exception as e:
-                    logger.warning(f"  Error inserting record: {e}")
+                    logger.warning(f"Error inserting record: {e}")
                     continue
             
             total_records += len(music_data)
-            logger.info(f"  Loaded {len(music_data)} records")
+            logger.info(f"Loaded {len(music_data)} records")
             
         except Exception as e:
             logger.error(f"Error loading {json_file}: {e}")
             continue
-    
-    # Get statistics
-    stats = conn.execute("""
-        SELECT 
-            COUNT(*) as total_plays,
-            COUNT(DISTINCT master_metadata_track_name) as unique_tracks,
-            MIN(ts) as first_play,
-            MAX(ts) as last_play,
-            ROUND(SUM(ms_played) / 1000.0 / 60.0 / 60.0, 2) as total_hours
-        FROM raw_spotify_extended_history
-    """).fetchone()
-    
-    logger.info("=" * 60)
-    logger.info("EXTENDED STREAMING HISTORY LOADED")
-    logger.info("=" * 60)
-    logger.info(f"Total plays: {stats[0]:,}")
-    logger.info(f"Unique tracks: {stats[1]:,}")
-    logger.info(f"First play: {stats[2]}")
-    logger.info(f"Last play: {stats[3]}")
-    logger.info(f"Total listening time: {stats[4]:,} hours")
-    logger.info("=" * 60)
-    
     conn.close()
 
 

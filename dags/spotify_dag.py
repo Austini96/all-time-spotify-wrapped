@@ -3,6 +3,7 @@ Spotify Analytics DAG
 Runs hourly to extract, load, and transform Spotify listening data
 With OpenLineage integration for data lineage tracking
 """
+
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 from airflow.operators.bash import BashOperator
@@ -22,12 +23,7 @@ from emit_lineage import emit_dbt_lineage
 from sync_to_postgres import sync_duckdb_to_postgres
 from load_extended_history import load_extended_streaming_history
 
-# OpenLineage will automatically track lineage via Airflow's integration
-# We'll use inlets/outlets to explicitly declare dataset lineage
-
-
 def alert_slack_channel(context):
-    """Alert to slack channel on failure (after all retries exhausted)"""
     slack_webhook_url = os.getenv('SLACK_WEBHOOK_URL')
     if not slack_webhook_url:
         return
@@ -52,7 +48,6 @@ def alert_slack_channel(context):
 
 
 def alert_slack_retry(context):
-    """Alert to slack channel on retry"""
     slack_webhook_url = os.getenv('SLACK_WEBHOOK_URL')
     if not slack_webhook_url:
         return
@@ -166,8 +161,6 @@ dbt_deps = BashOperator(
 )
 
 # Task 5: Run dbt models
-# Note: dbt-ol doesn't support DuckDB yet, so we use regular dbt
-# OpenLineage events will be captured via Airflow's inlet/outlet mechanism
 dbt_run = BashOperator(
     task_id='dbt_run',
     bash_command='cd /opt/airflow/dbt_project && dbt run --profiles-dir .',
@@ -226,10 +219,6 @@ dbt_docs = BashOperator(
 )
 
 # Define task dependencies
-# Parallelization:
-# 1. load_data and load_extended run in parallel after extract_data
-# 2. dbt_test and dbt_docs run in parallel after sync_postgres
-
 validate_env >> extract_data
 
 # Both loaders run in parallel

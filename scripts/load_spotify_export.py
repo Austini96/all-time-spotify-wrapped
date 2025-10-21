@@ -1,13 +1,7 @@
 """
 Load Spotify Extended Streaming History Export into DuckDB
-
-Instructions:
-1. Request your data from https://www.spotify.com/account/privacy/
-2. Wait for email (5-30 days)
-3. Download and extract the ZIP file
-4. Place JSON files in data/raw/spotify_export/
-5. Run this script: python scripts/load_spotify_export.py
 """
+
 import json
 import pandas as pd
 import duckdb
@@ -21,13 +15,6 @@ logger = logging.getLogger(__name__)
 
 
 def load_streaming_history(export_dir='data/raw/spotify_export'):
-    """
-    Load Spotify extended streaming history JSON files
-    
-    Args:
-        export_dir: Directory containing Streaming_History_Audio_*.json files
-    """
-    
     # Find all streaming history files
     json_files = glob.glob(f"{export_dir}/Streaming_History_Audio_*.json")
     
@@ -36,11 +23,7 @@ def load_streaming_history(export_dir='data/raw/spotify_export'):
     
     if not json_files:
         logger.error(f"No streaming history files found in {export_dir}")
-        logger.info("Expected files: Streaming_History_Audio_*.json or endsong_*.json")
-        logger.info("Please extract your Spotify data export to this directory")
         return None
-    
-    logger.info(f"Found {len(json_files)} streaming history files")
     
     # Load all JSON files
     all_plays = []
@@ -80,7 +63,6 @@ def load_streaming_history(export_dir='data/raw/spotify_export'):
     if 'duration_ms' in df.columns:
         before_count = len(df)
         df = df[df['duration_ms'] >= min_play_duration]
-        logger.info(f"Filtered out {before_count - len(df):,} skipped songs (< 30s)")
     
     # Select relevant columns
     columns_to_keep = [
@@ -98,13 +80,10 @@ def load_streaming_history(export_dir='data/raw/spotify_export'):
     df = df.sort_values('played_at')
     
     logger.info(f"Processed {len(df):,} valid plays")
-    logger.info(f"Date range: {df['played_at'].min()} to {df['played_at'].max()}")
-    
     return df
 
 
 def save_to_csv(df, output_file='data/raw/spotify_export_processed.csv'):
-    """Save processed data to CSV"""
     os.makedirs(os.path.dirname(output_file), exist_ok=True)
     df.to_csv(output_file, index=False)
     logger.info(f"Saved to {output_file}")
@@ -112,8 +91,6 @@ def save_to_csv(df, output_file='data/raw/spotify_export_processed.csv'):
 
 
 def load_to_duckdb(df, db_path='data/duckdb/spotify.duckdb'):
-    """Load historical data into DuckDB"""
-    
     conn = duckdb.connect(db_path)
     
     # Create table if not exists (similar to raw_spotify_tracks)
@@ -137,7 +114,6 @@ def load_to_duckdb(df, db_path='data/duckdb/spotify.duckdb'):
     ).fetchone()[0]
     
     # Insert data
-    logger.info("Inserting into DuckDB...")
     conn.execute("""
         INSERT INTO raw_spotify_tracks_historical
         SELECT 
@@ -161,48 +137,18 @@ def load_to_duckdb(df, db_path='data/duckdb/spotify.duckdb'):
     new_records = count_after - count_before
     logger.info(f"Inserted {new_records:,} new historical records")
     logger.info(f"Total historical records: {count_after:,}")
-    
-    # Show stats
-    stats = conn.execute("""
-        SELECT 
-            MIN(played_at) as earliest_play,
-            MAX(played_at) as latest_play,
-            COUNT(DISTINCT track_id) as unique_tracks,
-            COUNT(DISTINCT artist_name) as unique_artists,
-            COUNT(*) as total_plays
-        FROM raw_spotify_tracks_historical
-    """).fetchdf()
-    
-    print("\n" + "="*60)
-    print("HISTORICAL DATA LOADED")
-    print("="*60)
-    print(stats.to_string(index=False))
-    print("="*60 + "\n")
-    
+
     conn.close()
     
     return new_records
 
 
 def main():
-    """Main function"""
-    print("\n🎵 Spotify Extended History Loader 🎵\n")
-    
     export_dir = 'data/raw/spotify_export'
     
     # Check if directory exists
     if not os.path.exists(export_dir):
-        print(f"❌ Directory not found: {export_dir}")
-        print("\nTo get your historical data:")
-        print("1. Go to: https://www.spotify.com/account/privacy/")
-        print("2. Click 'Download your data'")
-        print("3. Request 'Extended streaming history'")
-        print("4. Wait for email (5-30 days)")
-        print("5. Extract ZIP to: data/raw/spotify_export/")
-        print("\nCreating directory for you...")
-        os.makedirs(export_dir, exist_ok=True)
-        print(f"✓ Created {export_dir}")
-        print("Please add your JSON files here and run again.")
+        print(f"Directory not found: {export_dir}")
         return
     
     # Load data
@@ -217,12 +163,7 @@ def main():
     # Load to DuckDB
     load_to_duckdb(df)
     
-    print("\n✅ Historical data loaded successfully!")
-    print("\nYou can now query this data:")
-    print("  duckdb data/duckdb/spotify.duckdb")
-    print("  SELECT * FROM raw_spotify_tracks_historical LIMIT 10;")
-    print("\nOr combine with recent data in your dbt models!")
-
+    print("Historical data loaded successfully.")
 
 if __name__ == "__main__":
     main()

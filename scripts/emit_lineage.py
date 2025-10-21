@@ -1,27 +1,17 @@
 """
 Manually emit OpenLineage events for complete dataset lineage
-Includes extended history, playlists, and full column-level lineage from raw sources
 """
+
 import os
 import requests
 from datetime import datetime
 import uuid
 
-MARQUEZ_URL = os.getenv('OPENLINEAGE_URL', 'http://marquez-api:5000')
-NAMESPACE = os.getenv('OPENLINEAGE_NAMESPACE', 'spotify_analytics')
+MARQUEZ_URL = os.getenv('OPENLINEAGE_URL')
+NAMESPACE = os.getenv('OPENLINEAGE_NAMESPACE')
 
 
 def emit_openlineage_event(job_name, inputs=None, outputs=None, column_lineage=None, run_id=None):
-    """
-    Emit an OpenLineage event to Marquez with column-level lineage
-    
-    Args:
-        job_name: Name of the job
-        inputs: List of dicts with 'name' and optionally 'fields' (schema)
-        outputs: List of dicts with 'name' and optionally 'fields' (schema)
-        column_lineage: Dict mapping output columns to input columns
-        run_id: Optional run ID (generated if not provided)
-    """
     if run_id is None:
         run_id = str(uuid.uuid4())
     
@@ -103,27 +93,17 @@ def emit_openlineage_event(job_name, inputs=None, outputs=None, column_lineage=N
         )
         if response.status_code in [200, 201]:
             col_info = f", {len(column_lineage)} column mappings" if column_lineage else ""
-            print(f"✓ Emitted lineage for {job_name}")
-            print(f"  Inputs: {len(input_datasets)}, Outputs: {len(output_datasets)}{col_info}")
+            print(f"Emitted lineage for {job_name}")
+            print(f"Inputs: {len(input_datasets)}, Outputs: {len(output_datasets)}{col_info}")
         else:
-            print(f"✗ Failed to emit lineage: {response.status_code}")
-            print(f"  Response: {response.text}")
+            print(f"Failed to emit lineage: {response.status_code}")
+            print(f"Response: {response.text}")
     except Exception as e:
-        print(f"✗ Error emitting lineage: {e}")
+        print(f"Error emitting lineage: {e}")
 
 
 def emit_dbt_lineage():
-    """Emit comprehensive lineage for all dbt models including extended history and playlists"""
-    
-    print("\n🔗 Emitting complete dbt model lineage to Marquez...")
-    print(f"   Marquez URL: {MARQUEZ_URL}")
-    print(f"   Namespace: {NAMESPACE}\n")
-    
-    # ========================================
-    # STAGING MODELS
-    # ========================================
-    
-    # 1. stg_spotify_tracks (from API)
+    # 1. stg_spotify_tracks
     emit_openlineage_event(
         job_name="dbt.stg_spotify_tracks",
         inputs=[{
@@ -171,7 +151,7 @@ def emit_dbt_lineage():
         }
     )
     
-    # 2. stg_spotify_extended_history (from extended streaming history)
+    # 2. stg_spotify_extended_history
     emit_openlineage_event(
         job_name="dbt.stg_spotify_extended_history",
         inputs=[{
@@ -242,7 +222,7 @@ def emit_dbt_lineage():
         outputs=[{"name": "staging.stg_spotify_artists"}]
     )
     
-    # 5. stg_spotify_playlists (NEW)
+    # 5. stg_spotify_playlists
     emit_openlineage_event(
         job_name="dbt.stg_spotify_playlists",
         inputs=[{
@@ -277,7 +257,7 @@ def emit_dbt_lineage():
         }
     )
     
-    # 6. stg_spotify_playlist_tracks (NEW)
+    # 6. stg_spotify_playlist_tracks
     emit_openlineage_event(
         job_name="dbt.stg_spotify_playlist_tracks",
         inputs=[{
@@ -306,11 +286,7 @@ def emit_dbt_lineage():
         }
     )
     
-    # ========================================
-    # MARTS - DIMENSION TABLES
-    # ========================================
-    
-    # 7. dim_tracks (combines API + extended history)
+    # 7. dim_tracks
     emit_openlineage_event(
         job_name="dbt.dim_tracks",
         inputs=[
@@ -346,7 +322,7 @@ def emit_dbt_lineage():
         }
     )
     
-    # 8. dim_artists (combines API + extended history)
+    # 8. dim_artists
     emit_openlineage_event(
         job_name="dbt.dim_artists",
         inputs=[
@@ -377,7 +353,7 @@ def emit_dbt_lineage():
         }
     )
     
-    # 9. dim_albums (combines API + extended history)
+    # 9. dim_albums
     emit_openlineage_event(
         job_name="dbt.dim_albums",
         inputs=[
@@ -405,7 +381,7 @@ def emit_dbt_lineage():
         }
     )
     
-    # 10. dim_playlists (NEW)
+    # 10. dim_playlists
     emit_openlineage_event(
         job_name="dbt.dim_playlists",
         inputs=[
@@ -429,11 +405,7 @@ def emit_dbt_lineage():
         }
     )
     
-    # ========================================
-    # MARTS - FACT TABLE
-    # ========================================
-    
-    # 11. fct_listening_history (complete fact table with extended history + playlists)
+    # 11. fct_listening_history
     emit_openlineage_event(
         job_name="dbt.fct_listening_history",
         inputs=[
@@ -485,12 +457,8 @@ def emit_dbt_lineage():
             "valence": {"inputFields": [{"namespace": NAMESPACE, "name": "staging.stg_spotify_audio_features", "field": "valence"}]},
         }
     )
-    
-    # ========================================
-    # ANALYTICS MODELS
-    # ========================================
-    
-    # 12. playlist_analysis (NEW)
+
+    # 12. playlist_analysis
     emit_openlineage_event(
         job_name="dbt.playlist_analysis",
         inputs=[
@@ -568,13 +536,6 @@ def emit_dbt_lineage():
             "valence": {"inputFields": [{"namespace": NAMESPACE, "name": "marts.fct_listening_history", "field": "valence"}]},
         }
     )
-    
-    print("\n✅ Successfully emitted lineage for 16 dbt models")
-    print("   - 6 staging models (including extended history & playlists)")
-    print("   - 5 mart models (dimensions + fact)")
-    print("   - 5 analytics models (including playlist analysis)")
-    print(f"\n🔍 View lineage at: http://localhost:3000\n")
-
 
 if __name__ == "__main__":
     emit_dbt_lineage()
