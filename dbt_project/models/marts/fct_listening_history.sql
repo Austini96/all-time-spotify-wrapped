@@ -7,6 +7,7 @@ WITH api_plays AS (
     SELECT
         play_id,
         played_at,
+        played_at - INTERVAL 6 HOURS AS played_at_cst,
         played_date,
         played_year,
         played_month,
@@ -41,6 +42,7 @@ extended_plays AS (
     SELECT
         ROW_NUMBER() OVER (ORDER BY played_at) + 1000000 as play_id,  -- Add offset to avoid conflicts
         played_at,
+        played_at - INTERVAL 6 HOURS AS played_at_cst,
         played_date,
         EXTRACT(YEAR FROM played_at) as played_year,
         EXTRACT(MONTH FROM played_at) as played_month,
@@ -111,15 +113,16 @@ plays_with_playlists AS (
 SELECT
     pwp.play_id,
     pwp.played_at,
-    pwp.played_at AT TIME ZONE 'America/Chicago' AS played_at_cst,
+    pwp.played_at_cst,
     pwp.played_date,
     pwp.played_year,
     pwp.played_month,
     pwp.played_day,
     pwp.played_hour AS played_hour_utc,
-    EXTRACT(HOUR FROM (pwp.played_at AT TIME ZONE 'America/Chicago')) AS played_hour_cst,
+    EXTRACT(HOUR FROM pwp.played_at_cst) AS played_hour_cst,
     pwp.played_day_of_week,
     pwp.played_day_name,
+    DAYNAME(pwp.played_at_cst) AS played_day_name_cst,
     
     -- Track information
     pwp.track_id,
