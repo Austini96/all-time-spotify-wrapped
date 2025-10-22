@@ -35,6 +35,7 @@ data/raw/*.json
 data/exports/*.csv
 data/exports/*.parquet
 data/extended_history/*.json
+Spotify Extended Streaming History/
 
 # Spotify authentication
 .env

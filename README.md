@@ -81,7 +81,7 @@ Deep dive into a my complete song listening history to analyze top artists, trac
 
 #### 5. **Visualization**
 - **Metabase with DuckDB Driver**:
-  - Metabase connects directly to DuckDB (no PostgreSQL needed!)
+  - Metabase connects directly to DuckDB (no PostgreSQL needed due to DuckDB driver)
   - Uses custom Dockerfile with [DuckDB driver](https://github.com/motherduckdb/metabase_duckdb_driver)
   - Queries analytical tables directly from DuckDB for real-time insights
 
