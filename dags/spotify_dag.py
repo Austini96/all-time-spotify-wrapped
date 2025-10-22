@@ -164,8 +164,8 @@ dbt_docs = BashOperator(
 # Define task dependencies
 validate_env >> extract_data
 
-# Both loaders run in parallel
-extract_data >> [load_data, load_extended]
+# Run loaders sequentially to avoid DuckDB locking issues
+extract_data >> load_data >> load_extended
 
 # Both loaders must complete before dbt
-[load_data, load_extended] >> dbt_deps >> dbt_run >> [dbt_test, dbt_docs]
+load_extended >> dbt_deps >> dbt_run >> [dbt_test, dbt_docs]
