@@ -78,7 +78,6 @@ Deep dive into a my complete song listening history to analyze top artists, trac
   - Automatically emits column-level lineage during dbt execution
   - Tracks transformations from raw sources through staging to analytics
   - Shows exactly which raw columns feed into each analytical metric
-  - DuckDB support added in OpenLineage v1.26.0
 
 #### 5. **Visualization**
 - **Metabase with DuckDB Driver**:
