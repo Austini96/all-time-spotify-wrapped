@@ -72,7 +72,7 @@ Deep dive into a my complete song listening history to analyze top artists, trac
 
 #### 4. **Lineage Tracking**
 
-![](MarquezLineage.png)
+![](images/Lineage.png)
 
 - **OpenLineage Integration** (`dbt-ol`):
   - Automatically emits column-level lineage during dbt execution
