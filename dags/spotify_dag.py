@@ -19,8 +19,6 @@ sys.path.insert(0, '/opt/airflow/scripts')
 from spotify_extractor import extract_spotify_data
 from duckdb_loader import load_to_duckdb
 from utils import validate_env_vars
-from emit_lineage import emit_dbt_lineage
-from sync_to_postgres import sync_duckdb_to_postgres
 from load_extended_history import load_extended_streaming_history
 
 def alert_slack_channel(context):
@@ -118,12 +116,6 @@ validate_env = PythonOperator(
 extract_data = PythonOperator(
     task_id='extract_spotify_data',
     python_callable=extract_spotify_data,
-    # Outlets: datasets this task produces
-    outlets=[
-        File('/opt/airflow/data/raw/spotify_tracks.csv'),
-        File('/opt/airflow/data/raw/spotify_audio_features.csv'),
-        File('/opt/airflow/data/raw/spotify_artists.csv'),
-    ],
     dag=dag,
 )
 
@@ -131,18 +123,6 @@ extract_data = PythonOperator(
 load_data = PythonOperator(
     task_id='load_to_duckdb',
     python_callable=load_to_duckdb,
-    # Inlets: datasets this task reads from
-    inlets=[
-        File('/opt/airflow/data/raw/spotify_tracks.csv'),
-        File('/opt/airflow/data/raw/spotify_audio_features.csv'),
-        File('/opt/airflow/data/raw/spotify_artists.csv'),
-    ],
-    # Outlets: datasets this task produces (DuckDB tables)
-    outlets=[
-        {'namespace': 'duckdb://spotify.duckdb', 'name': 'raw_spotify_tracks'},
-        {'namespace': 'duckdb://spotify.duckdb', 'name': 'raw_spotify_audio_features'},
-        {'namespace': 'duckdb://spotify.duckdb', 'name': 'raw_spotify_artists'},
-    ],
     dag=dag,
 )
 
@@ -160,58 +140,21 @@ dbt_deps = BashOperator(
     dag=dag,
 )
 
-# Task 5: Run dbt models
+# Task 5: Run dbt models with OpenLineage tracking
 dbt_run = BashOperator(
     task_id='dbt_run',
-    bash_command='cd /opt/airflow/dbt_project && dbt run --profiles-dir .',
-    # Inlets: raw DuckDB tables
-    inlets=[
-        {'namespace': 'duckdb://spotify.duckdb', 'name': 'raw_spotify_tracks'},
-        {'namespace': 'duckdb://spotify.duckdb', 'name': 'raw_spotify_audio_features'},
-        {'namespace': 'duckdb://spotify.duckdb', 'name': 'raw_spotify_artists'},
-    ],
-    # Outlets: transformed dbt models
-    outlets=[
-        # Staging models
-        {'namespace': 'duckdb://spotify.duckdb', 'name': 'staging.stg_spotify_tracks'},
-        {'namespace': 'duckdb://spotify.duckdb', 'name': 'staging.stg_spotify_audio_features'},
-        {'namespace': 'duckdb://spotify.duckdb', 'name': 'staging.stg_spotify_artists'},
-        # Marts models
-        {'namespace': 'duckdb://spotify.duckdb', 'name': 'marts.dim_tracks'},
-        {'namespace': 'duckdb://spotify.duckdb', 'name': 'marts.dim_artists'},
-        {'namespace': 'duckdb://spotify.duckdb', 'name': 'marts.dim_albums'},
-        {'namespace': 'duckdb://spotify.duckdb', 'name': 'marts.fct_listening_history'},
-        # Analytics models
-        {'namespace': 'duckdb://spotify.duckdb', 'name': 'analytics.top_tracks_daily'},
-        {'namespace': 'duckdb://spotify.duckdb', 'name': 'analytics.top_artists_daily'},
-        {'namespace': 'duckdb://spotify.duckdb', 'name': 'analytics.listening_patterns_hourly'},
-        {'namespace': 'duckdb://spotify.duckdb', 'name': 'analytics.audio_features_analysis'},
-    ],
+    bash_command='cd /opt/airflow/dbt_project && dbt-ol run --profiles-dir .',
     dag=dag,
 )
 
-# Task 6: Emit lineage events to Marquez
-emit_lineage = PythonOperator(
-    task_id='emit_lineage',
-    python_callable=emit_dbt_lineage,
-    dag=dag,
-)
-
-# Task 7: Sync data to PostgreSQL for Metabase
-sync_postgres = PythonOperator(
-    task_id='sync_to_postgres',
-    python_callable=sync_duckdb_to_postgres,
-    dag=dag,
-)
-
-# Task 8: Run dbt tests
+# Task 6: Run dbt tests
 dbt_test = BashOperator(
     task_id='dbt_test',
     bash_command='cd /opt/airflow/dbt_project && dbt test --profiles-dir .',
     dag=dag,
 )
 
-# Task 9: Generate dbt docs
+# Task 8: Generate dbt docs
 dbt_docs = BashOperator(
     task_id='dbt_docs_generate',
     bash_command='cd /opt/airflow/dbt_project && dbt docs generate --profiles-dir .',
@@ -225,7 +168,4 @@ validate_env >> extract_data
 extract_data >> [load_data, load_extended]
 
 # Both loaders must complete before dbt
-[load_data, load_extended] >> dbt_deps >> dbt_run >> emit_lineage >> sync_postgres
-
-# Tests and docs generation run in parallel
-sync_postgres >> [dbt_test, dbt_docs]
+[load_data, load_extended] >> dbt_deps >> dbt_run >> [dbt_test, dbt_docs]

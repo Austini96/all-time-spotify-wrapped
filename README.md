@@ -1,5 +1,12 @@
 # All-Time Spotify Wrapped
 
+## Update Notes
+
+### 2025-10-21
+- **DuckDB + OpenLineage**: Updated automation of emitting column-level lineage to Marquez during dbt execution by using `openlineage-dbt` package and `dbt-ol run` to run the model instead of `dbt run`
+- **DuckDB + Metabase**: Metabase is now connecting directly to DuckDB using the [DuckDB driver](https://github.com/motherduckdb/metabase_duckdb_driver), eliminating the unnecessary work for PostgreSQL sync, thus simplifying the architecture.
+
+## Overview
 A comprehensive data pipeline that extracts, transforms, and visualizes a user's complete Spotify listening history using modern data engineering tools and practices.
 
 ## Reference
@@ -23,9 +30,9 @@ Deep dive into a my complete song listening history to analyze top artists, trac
 |----------|-----------|
 | **Containerization** | [Docker](https://www.docker.com), [Docker Compose](https://docs.docker.com/compose/) |
 | **Orchestration** | [Apache Airflow](https://airflow.apache.org) |
-| **Storage** | [DuckDB](https://duckdb.org) (analytical), [PostgreSQL](https://www.postgresql.org) (Metabase) |
+| **Storage** | [DuckDB](https://duckdb.org) (analytical) |
 | **Transformation** | [dbt Core](https://www.getdbt.com) |
-| **Visualization** | [Metabase](https://www.metabase.com) |
+| **Visualization** | [Metabase](https://www.metabase.com) with [DuckDB Driver](https://github.com/motherduckdb/metabase_duckdb_driver) |
 | **Lineage** | [OpenLineage](https://openlineage.io), [Marquez](https://marquezproject.ai) |
 | **Language** | [Python 3.10](https://www.python.org) |
 | **API** | [Spotify Web API](https://developer.spotify.com/documentation/web-api) |
@@ -64,17 +71,20 @@ Deep dive into a my complete song listening history to analyze top artists, trac
   3. `analytics`: analytical models from marts layer
 
 #### 4. **Lineage Tracking**
-![OpenLineage](/images/Marquez%20Lineage.png)
-- **OpenLineage Integration** (`emit_lineage`):
-  - Emits column-level lineage for all 16 dbt models
+
+![](MarquezLineage.png)
+
+- **OpenLineage Integration** (`dbt-ol`):
+  - Automatically emits column-level lineage during dbt execution
   - Tracks transformations from raw sources through staging to analytics
   - Shows exactly which raw columns feed into each analytical metric
+  - DuckDB support added in OpenLineage v1.26.0
 
-#### 5. **Data Sync**
-- **PostgreSQL Sync** (`sync_to_postgres`):
-  - Copies analytical tables from DuckDB to PostgreSQL
-  - Metabase connects to PostgreSQL for visualization
-  - Automatically recreates tables to pick up schema changes
+#### 5. **Visualization**
+- **Metabase with DuckDB Driver**:
+  - Metabase connects directly to DuckDB (no PostgreSQL needed!)
+  - Uses custom Dockerfile with [DuckDB driver](https://github.com/motherduckdb/metabase_duckdb_driver)
+  - Queries analytical tables directly from DuckDB for real-time insights
 
 #### 6. **Quality & Documentation**
 - **dbt Tests**: Validates data quality (uniqueness, not null, relationships)
