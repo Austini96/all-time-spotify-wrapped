@@ -5,6 +5,7 @@ import duckdb
 import glob
 import os
 import logging
+import time
 from pathlib import Path
 
 logging.basicConfig(level=logging.INFO)
@@ -15,12 +16,29 @@ class DuckDBLoader:
     """Load data into DuckDB warehouse"""
     
     def __init__(self, db_path='/opt/airflow/data/duckdb/spotify.duckdb'):
-        #Initialize DuckDB connection
+        #Initialize DuckDB connection with retry logic
         os.makedirs(os.path.dirname(db_path), exist_ok=True)
         self.db_path = db_path
-        self.conn = duckdb.connect(db_path)
+        self.conn = self._connect_with_retry()
         logger.info(f"Connected to DuckDB at {db_path}")
         self.init_tables()
+    
+    def _connect_with_retry(self, max_retries=5, retry_delay=2):
+        for attempt in range(max_retries):
+            try:
+                # Try to connect
+                conn = duckdb.connect(self.db_path)
+                return conn
+            except Exception as e:
+                if "lock" in str(e).lower() and attempt < max_retries - 1:
+                    logger.warning(f"Lock conflict on attempt {attempt + 1}: {e}")
+                    cleanup_duckdb_locks(self.db_path)
+                    time.sleep(retry_delay)
+                    retry_delay *= 2  # Exponential backoff
+                else:
+                    logger.error(f"Failed to connect to DuckDB after {attempt + 1} attempts: {e}")
+                    raise
+        raise Exception("Max retries exceeded for DuckDB connection")
     
     def init_tables(self):
         # Raw tracks table
@@ -108,8 +126,6 @@ class DuckDBLoader:
                 PRIMARY KEY (playlist_id, track_id)
             )
         """)
-        
-        logger.info("Initialized raw tables (tracks, features, artists, playlists)")
     
     def load_tracks(self, csv_file):
         try:
@@ -139,7 +155,6 @@ class DuckDBLoader:
             # Get count after insert to calculate difference
             count_after = self.conn.execute("SELECT COUNT(*) FROM raw_spotify_tracks").fetchone()[0]
             count = count_after - count_before
-            logger.info(f"Loaded {count} new tracks from {csv_file}")
             
         except Exception as e:
             logger.error(f"Error loading tracks: {e}")
@@ -184,7 +199,6 @@ class DuckDBLoader:
             # Get count after insert to calculate difference
             count_after = self.conn.execute("SELECT COUNT(*) FROM raw_spotify_audio_features").fetchone()[0]
             count = count_after - count_before
-            logger.info(f"Loaded/updated {count} audio features from {csv_file}")
             
         except Exception as e:
             logger.warning(f"Could not load audio features: {e}")
@@ -222,7 +236,6 @@ class DuckDBLoader:
             # Get count after insert to calculate difference
             count_after = self.conn.execute("SELECT COUNT(*) FROM raw_spotify_artists").fetchone()[0]
             count = count_after - count_before
-            logger.info(f"Loaded/updated {count} artists from {csv_file}")
             
         except Exception as e:
             logger.warning(f"Could not load artists: {e}")
@@ -269,7 +282,6 @@ class DuckDBLoader:
             # Get count after insert to calculate difference
             count_after = self.conn.execute("SELECT COUNT(*) FROM raw_spotify_playlists").fetchone()[0]
             count = count_after - count_before
-            logger.info(f"Loaded/updated {count} playlists from {csv_file}")
             
         except Exception as e:
             logger.error(f"Error loading playlists: {e}")
@@ -305,7 +317,6 @@ class DuckDBLoader:
             # Get count after insert to calculate difference
             count_after = self.conn.execute("SELECT COUNT(*) FROM raw_spotify_playlist_tracks").fetchone()[0]
             count = count_after - count_before
-            logger.info(f"Loaded/updated {count} playlist-track relationships from {csv_file}")
             
         except Exception as e:
             logger.error(f"Error loading playlist tracks: {e}")
@@ -353,35 +364,73 @@ class DuckDBLoader:
         
         logger.info(f"Loaded {loaded_count} of 5 data types successfully")
     
-    def get_stats(self):
-        stats = {}
-        
-        stats['total_plays'] = self.conn.execute(
-            "SELECT COUNT(*) FROM raw_spotify_tracks"
-        ).fetchone()[0]
-        
-        stats['unique_tracks'] = self.conn.execute(
-            "SELECT COUNT(DISTINCT track_id) FROM raw_spotify_tracks"
-        ).fetchone()[0]
-        
-        stats['unique_artists'] = self.conn.execute(
-            "SELECT COUNT(*) FROM raw_spotify_artists"
-        ).fetchone()[0]
-        
-        logger.info(f"Database stats: {stats}")
-        return stats
-    
     def close(self):
-        self.conn.close()
-        logger.info("Closed DuckDB connection")
+        try:
+            if hasattr(self, 'conn') and self.conn:
+                self.conn.close()
+        except Exception as e:
+            logger.warning(f"Error closing DuckDB connection: {e}")
+        finally:
+            self.conn = None
 
+
+def cleanup_duckdb_locks(db_path='/opt/airflow/data/duckdb/spotify.duckdb'):
+    try:
+        # Remove the main database file if it exists (will be recreated)
+        if os.path.exists(db_path):
+            os.remove(db_path)
+        
+        # Remove any .wal files that might be holding locks
+        wal_files = glob.glob(f"{db_path}.wal*")
+        for wal_file in wal_files:
+            os.remove(wal_file)
+            logger.info(f"Removed stale WAL file: {wal_file}")
+        
+        # Remove any .lock files
+        lock_files = glob.glob(f"{db_path}.lock*")
+        for lock_file in lock_files:
+            os.remove(lock_file)
+            logger.info(f"Removed stale lock file: {lock_file}")
+        
+        # Remove any .tmp files
+        tmp_files = glob.glob(f"{db_path}.tmp*")
+        for tmp_file in tmp_files:
+            os.remove(tmp_file)
+            
+        # Remove any .backup files
+        backup_files = glob.glob(f"{db_path}.backup*")
+        for backup_file in backup_files:
+            os.remove(backup_file)
+            
+    except Exception as e:
+        logger.warning(f"Error cleaning up locks: {e}")
 
 def load_to_duckdb():
-    loader = DuckDBLoader()
-    loader.load_latest_csv_files()
-    stats = loader.get_stats()
-    loader.close()
-    return stats
+    # Clean up any stale locks first
+    cleanup_duckdb_locks()
+    
+    try:
+        loader = DuckDBLoader()
+        loader.load_latest_csv_files()
+        loader.close()
+    except Exception as e:
+        if "lock" in str(e).lower():
+            logger.error(f"Lock conflict persists after cleanup: {e}")
+            
+            # Try with a timestamped database file as fallback
+            import datetime
+            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            fallback_path = f'/opt/airflow/data/duckdb/spotify_{timestamp}.duckdb'
+            
+            try:
+                loader = DuckDBLoader(db_path=fallback_path)
+                loader.load_latest_csv_files()
+                loader.close()
+            except Exception as fallback_error:
+                logger.error(f"Fallback database also failed: {fallback_error}")
+                raise
+        else:
+            raise
 
 
 if __name__ == "__main__":
