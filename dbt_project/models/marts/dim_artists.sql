@@ -64,8 +64,9 @@ all_artists AS (
         NULL as followers
     FROM {{ ref('stg_spotify_extended_history') }}
     WHERE artist_id IS NOT NULL
-)
+),
 
+final_artists AS (
 SELECT
     a.artist_id,
     a.artist_name,
@@ -85,3 +86,19 @@ FROM all_artists a
 LEFT JOIN artist_stats s ON a.artist_id = s.artist_id
 -- Get the best version of each artist (prefer API data over extended history)
 QUALIFY ROW_NUMBER() OVER (PARTITION BY a.artist_id ORDER BY CASE WHEN a.genres IS NOT NULL THEN 0 ELSE 1 END) = 1
+)
+
+SELECT
+    ROW_NUMBER() OVER (ORDER BY artist_id) AS artist_key,
+    artist_id,
+    artist_name,
+    genres,
+    popularity,
+    followers,
+    total_plays,
+    unique_tracks_played,
+    days_played,
+    first_played_at,
+    last_played_at,
+    total_listen_time_hours
+FROM final_artists

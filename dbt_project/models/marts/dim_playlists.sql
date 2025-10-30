@@ -17,6 +17,7 @@ playlist_stats AS (
 
 final AS (
     SELECT
+        ROW_NUMBER() OVER (ORDER BY p.playlist_id) AS playlist_key,
         -- Surrogate key
         MD5(p.playlist_id) AS playlist_sk,
         

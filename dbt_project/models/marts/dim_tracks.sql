@@ -70,8 +70,9 @@ track_base AS (
         loaded_at
     FROM {{ ref('stg_spotify_extended_history') }}
     WHERE track_id IS NOT NULL
-)
+),
 
+final_tracks AS (
 SELECT
     t.track_id,
     t.track_name,
@@ -109,3 +110,34 @@ LEFT JOIN track_stats ts
 
 -- Get most recent version of each track
 QUALIFY ROW_NUMBER() OVER (PARTITION BY t.track_id ORDER BY t.loaded_at DESC) = 1
+)
+
+SELECT
+    ROW_NUMBER() OVER (ORDER BY track_id) AS track_key,
+    track_id,
+    track_name,
+    artist_id,
+    artist_name,
+    album_id,
+    album_name,
+    album_release_date,
+    album_release_year,
+    duration_ms,
+    popularity,
+    explicit,
+    danceability,
+    energy,
+    valence,
+    tempo,
+    acousticness,
+    instrumentalness,
+    speechiness,
+    liveness,
+    loudness,
+    mode_name,
+    mood_category,
+    total_plays,
+    first_played_at,
+    last_played_at,
+    days_played
+FROM final_tracks
