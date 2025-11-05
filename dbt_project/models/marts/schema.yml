@@ -2,52 +2,220 @@ version: 2
 
 models:
   - name: fct_listening_history
-    description: "Fact table containing all listening events with enriched data"
+    description: "Fact table containing all listening events with star schema design using dimension foreign keys. Join to dimension tables (dim_tracks, dim_artists, dim_albums, dim_playlists) to get descriptive attributes."
     columns:
       - name: play_id
         description: "Unique identifier for each play event"
         tests:
           - unique
           - not_null
+      - name: played_at
+        description: "Timestamp when the track was played (UTC)"
+      - name: played_at_cst
+        description: "Timestamp when the track was played (CST, UTC-6)"
+      - name: played_date
+        description: "Date when the track was played"
+      - name: played_year
+        description: "Year when the track was played"
+      - name: played_month
+        description: "Month when the track was played (1-12)"
+      - name: played_day
+        description: "Day of month when the track was played (1-31)"
+      - name: played_hour_utc
+        description: "Hour when the track was played (UTC, 0-23)"
+      - name: played_hour_cst
+        description: "Hour when the track was played (CST, 0-23)"
+      - name: played_day_of_week
+        description: "Day of week when the track was played (0=Sunday, 6=Saturday)"
+      - name: played_day_name
+        description: "Name of the day when the track was played (UTC)"
+      - name: played_day_name_cst
+        description: "Name of the day when the track was played (CST)"
+      - name: track_key
+        description: "Foreign key to dim_tracks (preferred for joins)"
+      - name: artist_key
+        description: "Foreign key to dim_artists (preferred for joins)"
+      - name: album_key
+        description: "Foreign key to dim_albums (preferred for joins)"
+      - name: playlist_key_1
+        description: "Foreign key to dim_playlists for the first playlist containing this track"
+      - name: playlist_key_2
+        description: "Foreign key to dim_playlists for the second playlist containing this track"
+      - name: playlist_key_3
+        description: "Foreign key to dim_playlists for the third playlist containing this track"
+      - name: playlist_key_4
+        description: "Foreign key to dim_playlists for the fourth playlist containing this track"
+      - name: playlist_key_5
+        description: "Foreign key to dim_playlists for the fifth playlist containing this track"
+      - name: playlist_count
+        description: "Total number of playlists containing this track"
+      - name: duration_ms
+        description: "Track duration in milliseconds (event-level metric)"
+      - name: track_popularity
+        description: "Track popularity score from Spotify (0-100) at time of play"
+      - name: explicit
+        description: "Whether the track contains explicit content"
+      - name: track_uri
+        description: "Spotify URI for the track"
+      - name: prev_track_key
+        description: "Foreign key to dim_tracks for the previous song played (for consecutive tracking)"
+      - name: prev_artist_key
+        description: "Foreign key to dim_artists for the previous song played (for consecutive tracking)"
+      - name: minutes_since_prev_play
+        description: "Minutes elapsed since the previous play"
+      - name: is_new_session
+        description: "Flag indicating if this play starts a new listening session (1 = new session, 0 = continuation)"
+      - name: session_number
+        description: "Sequential session number across all listening history"
+      - name: data_source
+        description: "Source of the data: 'api' for Spotify API or 'extended_history' for exported history"
+      - name: platform
+        description: "Platform where the track was played (from extended history)"
+      - name: conn_country
+        description: "Country code where the connection originated (from extended history)"
+      - name: shuffle
+        description: "Whether shuffle mode was enabled (from extended history)"
+      - name: skipped
+        description: "Whether the track was skipped (from extended history)"
+      - name: reason_start
+        description: "Reason the track started playing (from extended history)"
+      - name: reason_end
+        description: "Reason the track stopped playing (from extended history)"
+      - name: loaded_at
+        description: "Timestamp when this record was loaded into the data warehouse"
 
   - name: dim_tracks
-    description: "Dimension table for tracks with audio features and statistics"
+    description: "Dimension table for tracks with listening statistics aggregated from both API and extended history data"
     columns:
+      - name: track_key
+        description: "Surrogate key for track dimension (sequential number)"
       - name: track_id
-        description: "Spotify track ID"
+        description: "Spotify track ID (natural key)"
         tests:
           - unique
           - not_null
-
-  - name: dim_artists
-    description: "Dimension table for artists with statistics"
-    columns:
+      - name: track_name
+        description: "Name of the track"
       - name: artist_id
         description: "Spotify artist ID"
-        tests:
-          - unique
-          - not_null
-
-  - name: dim_albums
-    description: "Dimension table for albums with statistics"
-    columns:
+      - name: artist_name
+        description: "Name of the primary artist"
       - name: album_id
         description: "Spotify album ID"
+      - name: album_name
+        description: "Name of the album"
+      - name: album_release_date
+        description: "Release date of the album (YYYY-MM-DD format)"
+      - name: album_release_year
+        description: "Year the album was released"
+      - name: duration_ms
+        description: "Track duration in milliseconds"
+      - name: popularity
+        description: "Track popularity score from Spotify (0-100)"
+      - name: explicit
+        description: "Whether the track contains explicit content"
+      - name: total_plays
+        description: "Total number of times this track was played"
+      - name: first_played_at
+        description: "Timestamp of the first time this track was played"
+      - name: last_played_at
+        description: "Timestamp of the most recent play of this track"
+      - name: days_played
+        description: "Number of distinct days this track was played"
+
+  - name: dim_artists
+    description: "Dimension table for artists with listening statistics aggregated from both API and extended history data"
+    columns:
+      - name: artist_key
+        description: "Surrogate key for artist dimension (sequential number)"
+      - name: artist_id
+        description: "Spotify artist ID (natural key)"
         tests:
           - unique
           - not_null
+      - name: artist_name
+        description: "Name of the artist"
+      - name: genres
+        description: "Comma-separated list of genres associated with the artist"
+      - name: popularity
+        description: "Artist popularity score from Spotify (0-100)"
+      - name: followers
+        description: "Number of followers the artist has on Spotify"
+      - name: total_plays
+        description: "Total number of times tracks by this artist were played"
+      - name: unique_tracks_played
+        description: "Number of distinct tracks by this artist that were played"
+      - name: days_played
+        description: "Number of distinct days this artist was listened to"
+      - name: first_played_at
+        description: "Timestamp of the first time this artist was played"
+      - name: last_played_at
+        description: "Timestamp of the most recent play of this artist"
+      - name: total_listen_time_hours
+        description: "Total listening time for this artist in hours"
+
+  - name: dim_albums
+    description: "Dimension table for albums with listening statistics aggregated from both API and extended history data"
+    columns:
+      - name: album_key
+        description: "Surrogate key for album dimension (sequential number)"
+      - name: album_id
+        description: "Spotify album ID (natural key)"
+        tests:
+          - unique
+          - not_null
+      - name: album_name
+        description: "Name of the album"
+      - name: artist_id
+        description: "Spotify artist ID"
+      - name: artist_name
+        description: "Name of the primary artist"
+      - name: total_plays
+        description: "Total number of times tracks from this album were played"
+      - name: unique_tracks_played
+        description: "Number of distinct tracks from this album that were played"
+      - name: days_played
+        description: "Number of distinct days this album was listened to"
+      - name: first_played_at
+        description: "Timestamp of the first time this album was played"
+      - name: last_played_at
+        description: "Timestamp of the most recent play of this album"
 
   - name: dim_playlists
-    description: "Dimension table for playlists with track counts and statistics"
+    description: "Dimension table for playlists with track counts and metadata from Spotify API"
     columns:
+      - name: playlist_key
+        description: "Surrogate key for playlist dimension (sequential number)"
+      - name: playlist_sk
+        description: "MD5 hash surrogate key for playlist"
       - name: playlist_id
-        description: "Spotify playlist ID"
+        description: "Spotify playlist ID (natural key)"
         tests:
           - unique
           - not_null
       - name: playlist_name
         description: "Name of the playlist"
+      - name: owner_id
+        description: "Spotify user ID of the playlist owner"
       - name: is_owner
         description: "Whether the user owns this playlist"
+      - name: is_public
+        description: "Whether the playlist is public"
+      - name: is_collaborative
+        description: "Whether the playlist is collaborative"
+      - name: reported_track_count
+        description: "Number of tracks reported by Spotify API"
       - name: actual_track_count
         description: "Actual number of tracks loaded from the playlist"
+      - name: description
+        description: "Description of the playlist"
+      - name: first_track_added
+        description: "Timestamp when the first track was added to the playlist"
+      - name: last_track_added
+        description: "Timestamp when the most recent track was added to the playlist"
+      - name: snapshot_id
+        description: "Playlist snapshot ID from Spotify"
+      - name: extracted_at
+        description: "Timestamp when playlist data was extracted"
+      - name: dbt_updated_at
+        description: "Timestamp when this record was last updated by dbt"

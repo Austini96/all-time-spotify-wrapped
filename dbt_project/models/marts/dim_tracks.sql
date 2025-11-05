@@ -85,26 +85,12 @@ SELECT
     t.duration_ms,
     t.popularity,
     t.explicit,
-    -- Audio features
-    af.danceability,
-    af.energy,
-    af.valence,
-    af.tempo,
-    af.acousticness,
-    af.instrumentalness,
-    af.speechiness,
-    af.liveness,
-    af.loudness,
-    af.mode_name,
-    af.mood_category,
     -- Play statistics (from both API and extended history)
     COALESCE(ts.total_plays, 0) as total_plays,
     ts.first_played_at,
     ts.last_played_at,
     COALESCE(ts.days_played, 0) as days_played
 FROM track_base t
-LEFT JOIN {{ ref('stg_spotify_audio_features') }} af
-    ON t.track_id = af.track_id
 LEFT JOIN track_stats ts
     ON t.track_id = ts.track_id
 
@@ -125,17 +111,6 @@ SELECT
     duration_ms,
     popularity,
     explicit,
-    danceability,
-    energy,
-    valence,
-    tempo,
-    acousticness,
-    instrumentalness,
-    speechiness,
-    liveness,
-    loudness,
-    mode_name,
-    mood_category,
     total_plays,
     first_played_at,
     last_played_at,

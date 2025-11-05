@@ -2,19 +2,81 @@ version: 2
 
 models:
   - name: top_artists_daily
-    description: "Daily aggregation of top artists by play count"
+    description: "Daily aggregation of top artists ranked by play count with listening statistics (grouped by artist_key)"
+    columns:
+      - name: played_date
+        description: "Date of listening activity"
+      - name: artist_key
+        description: "Foreign key to dim_artists (used for grouping)"
+      - name: artist_id
+        description: "Spotify artist ID (natural key from dimension table)"
+      - name: artist_name
+        description: "Name of the artist"
+      - name: artist_genres
+        description: "Comma-separated list of genres associated with the artist"
+      - name: play_count
+        description: "Total number of plays for this artist on this date"
+      - name: unique_tracks_played
+        description: "Number of distinct tracks by this artist played on this date (based on track_key)"
+      - name: total_listen_time_ms
+        description: "Total listening time in milliseconds for this artist on this date"
+      - name: total_listen_time_minutes
+        description: "Total listening time in minutes for this artist on this date"
+      - name: avg_track_popularity
+        description: "Average popularity score of tracks played for this artist on this date"
+      - name: artist_followers
+        description: "Number of followers the artist has on Spotify"
     
   - name: top_tracks_daily
-    description: "Daily aggregation of top tracks by play count"
+    description: "Daily aggregation of top tracks ranked by play count with track metadata (grouped by track_key)"
+    columns:
+      - name: played_date
+        description: "Date of listening activity"
+      - name: track_key
+        description: "Foreign key to dim_tracks (used for grouping)"
+      - name: track_id
+        description: "Spotify track ID (natural key from dimension table)"
+      - name: track_name
+        description: "Name of the track"
+      - name: artist_name
+        description: "Name of the primary artist"
+      - name: album_name
+        description: "Name of the album"
+      - name: play_count
+        description: "Total number of plays for this track on this date"
+      - name: track_popularity
+        description: "Track popularity score from Spotify (0-100)"
+      - name: duration_ms
+        description: "Track duration in milliseconds"
+      - name: explicit
+        description: "Whether the track contains explicit content"
     
   - name: listening_patterns_hourly
-    description: "Hourly listening patterns with audio feature analysis"
-    
-  - name: audio_features_analysis
-    description: "Daily analysis of audio features and mood distribution"
+    description: "Hourly listening patterns aggregated by date and hour with volume metrics (using dimension keys for distinct counts)"
+    columns:
+      - name: played_date
+        description: "Date of listening activity"
+      - name: played_hour_cst
+        description: "Hour when tracks were played (CST, 0-23)"
+      - name: played_hour_utc
+        description: "Hour when tracks were played (UTC, 0-23)"
+      - name: played_day_of_week
+        description: "Day of week when tracks were played (0=Sunday, 6=Saturday)"
+      - name: played_day_name
+        description: "Name of the day when tracks were played"
+      - name: play_count
+        description: "Total number of plays in this hour"
+      - name: unique_tracks
+        description: "Number of distinct tracks played in this hour (based on track_key)"
+      - name: unique_artists
+        description: "Number of distinct artists played in this hour (based on artist_key)"
+      - name: total_listen_time_ms
+        description: "Total listening time in milliseconds for this hour"
+      - name: total_listen_time_minutes
+        description: "Total listening time in minutes for this hour"
     
   - name: playlist_analysis
-    description: "Comprehensive playlist analytics with play statistics and mood analysis"
+    description: "Comprehensive playlist analytics with play statistics"
     columns:
       - name: playlist_id
         description: "Spotify playlist ID"
@@ -30,9 +92,33 @@ models:
         description: "Total number of plays across all tracks in this playlist"
       - name: avg_plays_per_track
         description: "Average number of plays per track"
-      - name: playlist_mood
-        description: "Overall mood category of the playlist (Happy & Energetic, Happy & Calm, etc.)"
-      - name: avg_valence
-        description: "Average valence (positiveness) of tracks in the playlist"
-      - name: avg_energy
-        description: "Average energy level of tracks in the playlist"
+  
+  - name: consecutive_listening_daily
+    description: "Daily aggregation of consecutive listening metrics including songs and time per session (sessions are grouped by 30-minute gaps or day boundaries)"
+    columns:
+      - name: played_date
+        description: "Date of listening activity"
+      - name: total_sessions
+        description: "Total number of consecutive listening sessions on this day"
+      - name: total_consecutive_songs
+        description: "Total number of songs listened to consecutively across all sessions"
+      - name: max_consecutive_songs
+        description: "Maximum number of songs in the longest consecutive session on this day"
+      - name: avg_consecutive_songs_per_session
+        description: "Average number of songs per session on this day"
+      - name: total_consecutive_time_minutes
+        description: "Total time spent listening consecutively (sum of all session durations in minutes)"
+      - name: max_consecutive_time_minutes
+        description: "Maximum time spent in a single consecutive session (sum of track durations)"
+      - name: avg_consecutive_time_minutes
+        description: "Average time spent per session (in minutes)"
+      - name: longest_session_length_minutes
+        description: "Length of the longest consecutive session from first play to last play (in minutes)"
+      - name: avg_time_per_session_minutes
+        description: "Average time per session (total time divided by number of sessions)"
+      - name: first_session_start
+        description: "Timestamp when the first session of the day started"
+      - name: last_session_end
+        description: "Timestamp when the last session of the day ended"
+      - name: analyzed_at
+        description: "Timestamp when this analytics record was generated"

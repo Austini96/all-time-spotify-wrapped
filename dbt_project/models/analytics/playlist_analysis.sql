@@ -35,14 +35,8 @@ track_details AS (
         t.track_name,
         t.artist_name,
         t.album_name,
-        t.duration_ms,
-        af.valence,
-        af.energy,
-        af.danceability,
-        af.mood_category
+        t.duration_ms
     FROM {{ ref('stg_spotify_tracks') }} t
-    LEFT JOIN {{ ref('stg_spotify_audio_features') }} af
-        ON t.track_id = af.track_id
 ),
 
 playlist_stats AS (
@@ -62,11 +56,6 @@ playlist_stats AS (
         SUM(COALESCE(tp.play_count, 0)) AS total_plays,
         ROUND(AVG(COALESCE(tp.play_count, 0)), 2) AS avg_plays_per_track,
         MAX(tp.play_count) AS max_plays,
-        
-        -- Audio features averages
-        ROUND(AVG(td.valence), 3) AS avg_valence,
-        ROUND(AVG(td.energy), 3) AS avg_energy,
-        ROUND(AVG(td.danceability), 3) AS avg_danceability,
         
         -- Timing
         MIN(pt.added_at) AS first_track_added,
@@ -102,16 +91,6 @@ SELECT
     total_plays,
     avg_plays_per_track,
     max_plays,
-    avg_valence,
-    avg_energy,
-    avg_danceability,
-    CASE
-        WHEN avg_valence >= 0.6 AND avg_energy >= 0.6 THEN 'Happy & Energetic'
-        WHEN avg_valence >= 0.6 AND avg_energy < 0.6 THEN 'Happy & Calm'
-        WHEN avg_valence < 0.4 AND avg_energy >= 0.6 THEN 'Sad & Energetic'
-        WHEN avg_valence < 0.4 AND avg_energy < 0.6 THEN 'Sad & Calm'
-        ELSE 'Neutral'
-    END AS playlist_mood,
     total_duration_minutes,
     avg_track_duration_minutes,
     first_track_added,

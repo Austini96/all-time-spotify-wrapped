@@ -8,8 +8,6 @@ sources:
     tables:
       - name: raw_spotify_tracks
         description: "Raw track play history from Spotify API"
-      - name: raw_spotify_audio_features
-        description: "Raw audio features from Spotify API"
       - name: raw_spotify_artists
         description: "Raw artist information from Spotify API"
       - name: raw_spotify_playlists
@@ -21,10 +19,10 @@ sources:
 
 models:
   - name: stg_spotify_tracks
-    description: "Staging model for Spotify tracks with deduplication and date parsing"
+    description: "Staging model for Spotify tracks from API with deduplication, date parsing, and filtering by minimum play duration"
     columns:
       - name: play_id
-        description: "Unique identifier for each play event"
+        description: "Unique identifier for each play event (surrogate key)"
         tests:
           - unique
           - not_null
@@ -36,50 +34,97 @@ models:
         description: "Spotify track ID"
         tests:
           - not_null
+      - name: track_name
+        description: "Name of the track"
+      - name: artist_id
+        description: "Spotify artist ID"
+      - name: artist_name
+        description: "Name of the primary artist"
+      - name: album_id
+        description: "Spotify album ID"
+      - name: album_name
+        description: "Name of the album"
+      - name: album_release_date
+        description: "Release date of the album (YYYY-MM-DD format)"
+      - name: album_release_year
+        description: "Year the album was released (extracted from release_date)"
       - name: duration_ms
         description: "Track duration in milliseconds"
         tests:
           - not_null
-
-  - name: stg_spotify_audio_features
-    description: "Staging model for Spotify audio features"
-    columns:
-      - name: track_id
-        description: "Spotify track ID"
-        tests:
-          - unique
-          - not_null
-      - name: valence
-        description: "Musical positiveness (0.0 to 1.0)"
-      - name: energy
-        description: "Intensity and activity (0.0 to 1.0)"
+      - name: popularity
+        description: "Track popularity score from Spotify (0-100)"
+      - name: explicit
+        description: "Whether the track contains explicit content"
+      - name: track_uri
+        description: "Spotify URI for the track"
+      - name: played_date
+        description: "Date when the track was played"
+      - name: played_year
+        description: "Year when the track was played"
+      - name: played_month
+        description: "Month when the track was played (1-12)"
+      - name: played_day
+        description: "Day of month when the track was played (1-31)"
+      - name: played_hour
+        description: "Hour when the track was played (0-23)"
+      - name: played_day_of_week
+        description: "Day of week when the track was played (0=Sunday, 6=Saturday)"
+      - name: played_day_name
+        description: "Name of the day when the track was played"
+      - name: loaded_at
+        description: "Timestamp when this record was loaded into the raw table"
 
   - name: stg_spotify_artists
-    description: "Staging model for Spotify artists"
+    description: "Staging model for Spotify artists from API with deduplication (keeps most recent record per artist)"
     columns:
       - name: artist_id
-        description: "Spotify artist ID"
+        description: "Spotify artist ID (natural key)"
         tests:
           - unique
           - not_null
+      - name: artist_name
+        description: "Name of the artist"
+      - name: genres
+        description: "Comma-separated list of genres associated with the artist"
+      - name: popularity
+        description: "Artist popularity score from Spotify (0-100)"
+      - name: followers
+        description: "Number of followers the artist has on Spotify"
+      - name: loaded_at
+        description: "Timestamp when this record was loaded into the raw table"
 
   - name: stg_spotify_playlists
-    description: "Staging model for Spotify playlists"
+    description: "Staging model for Spotify playlists from API with deduplication (keeps most recent record per playlist)"
     columns:
       - name: playlist_id
-        description: "Spotify playlist ID"
+        description: "Spotify playlist ID (natural key)"
         tests:
           - unique
           - not_null
       - name: playlist_name
         description: "Name of the playlist"
+      - name: owner_id
+        description: "Spotify user ID of the playlist owner"
       - name: is_owner
         description: "Whether the user owns this playlist"
+      - name: is_public
+        description: "Whether the playlist is public"
+      - name: is_collaborative
+        description: "Whether the playlist is collaborative"
       - name: total_tracks
-        description: "Total number of tracks in the playlist"
+        description: "Total number of tracks in the playlist (as reported by API)"
+      - name: description
+        description: "Description of the playlist"
+      - name: snapshot_id
+        description: "Playlist snapshot ID from Spotify"
+      - name: extracted_at
+        description: "Timestamp when playlist data was extracted from API"
+      - name: loaded_at
+        description: "Timestamp when this record was loaded into the raw table"
 
   - name: stg_spotify_playlist_tracks
-    description: "Staging model for playlist-track relationships"
+    description: "Staging model for playlist-track junction table linking playlists to their tracks"
     columns:
       - name: playlist_id
         description: "Spotify playlist ID"
@@ -90,38 +135,66 @@ models:
         tests:
           - not_null
       - name: added_at
-        description: "When the track was added to the playlist"
+        description: "Timestamp when the track was added to the playlist"
+      - name: added_by
+        description: "Spotify user ID who added the track to the playlist"
       - name: position
         description: "Position of track in the playlist"
+      - name: loaded_at
+        description: "Timestamp when this record was loaded into the raw table"
 
   - name: stg_spotify_extended_history
-    description: "Staging model for Spotify extended history of playlists"
+    description: "Staging model for Spotify extended streaming history (2+ years) from exported data files with parsed track IDs and metadata"
     columns:
       - name: played_at
         description: "Timestamp of the play event"
         tests:
           - not_null
+      - name: played_date
+        description: "Date when the track was played"
       - name: platform
-        description: "Platform of the play event"
+        description: "Platform where the track was played (e.g., 'Android', 'iOS', 'Web Player')"
         tests:
           - not_null
       - name: ms_played
-        description: "Milliseconds played"
+        description: "Milliseconds the track was played"
         tests:
           - not_null
       - name: conn_country
-        description: "Country of the play event"
+        description: "Country code where the connection originated (ISO 3166-1 alpha-2)"
         tests:
           - not_null
+      - name: track_id
+        description: "Spotify track ID (extracted from spotify_track_uri)"
       - name: track_name
         description: "Name of the track"
         tests:
           - not_null
+      - name: artist_id
+        description: "Generated artist ID (hash-based, deterministic)"
       - name: artist_name
         description: "Name of the album artist"
         tests:
           - not_null
+      - name: album_id
+        description: "Generated album ID (hash-based, deterministic)"
       - name: album_name
         description: "Name of the album"
         tests:
           - not_null
+      - name: spotify_track_uri
+        description: "Spotify URI for the track (spotify:track:TRACK_ID)"
+      - name: reason_start
+        description: "Reason the track started playing (e.g., 'trackdone', 'fwdbtn', 'clickrow')"
+      - name: reason_end
+        description: "Reason the track stopped playing (e.g., 'trackdone', 'backbtn', 'fwdbtn')"
+      - name: shuffle
+        description: "Whether shuffle mode was enabled"
+      - name: skipped
+        description: "Whether the track was skipped"
+      - name: offline
+        description: "Whether the track was played offline"
+      - name: incognito_mode
+        description: "Whether the track was played in incognito mode"
+      - name: loaded_at
+        description: "Timestamp when this record was loaded into the raw table"

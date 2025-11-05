@@ -12,23 +12,10 @@ SELECT
     
     -- Volume metrics
     COUNT(*) as play_count,
-    COUNT(DISTINCT track_id) as unique_tracks,
-    COUNT(DISTINCT artist_id) as unique_artists,
+    COUNT(DISTINCT track_key) as unique_tracks,
+    COUNT(DISTINCT artist_key) as unique_artists,
     SUM(duration_ms) as total_listen_time_ms,
-    ROUND(SUM(duration_ms) / 60000.0, 2) as total_listen_time_minutes,
-    
-    -- Audio feature averages
-    AVG(energy) as avg_energy,
-    AVG(valence) as avg_valence,
-    AVG(danceability) as avg_danceability,
-    AVG(tempo) as avg_tempo,
-    AVG(acousticness) as avg_acousticness,
-    AVG(instrumentalness) as avg_instrumentalness,
-    AVG(speechiness) as avg_speechiness,
-    AVG(loudness) as avg_loudness,
-    
-    -- Most common mood
-    MODE() WITHIN GROUP (ORDER BY mood_category) as most_common_mood
+    ROUND(SUM(duration_ms) / 60000.0, 2) as total_listen_time_minutes
 
 FROM {{ ref('fct_listening_history') }}
 GROUP BY 

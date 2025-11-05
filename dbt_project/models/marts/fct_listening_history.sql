@@ -83,106 +83,124 @@ all_plays AS (
 playlist_rankings AS (
     SELECT
         ap.play_id,
-        p.playlist_name,
+        dp.playlist_key,
         ROW_NUMBER() OVER (PARTITION BY ap.play_id ORDER BY pt.added_at DESC) as playlist_rank
     FROM all_plays ap
     LEFT JOIN {{ ref('stg_spotify_playlist_tracks') }} pt
         ON ap.track_id = pt.track_id
-    LEFT JOIN {{ ref('stg_spotify_playlists') }} p
-        ON pt.playlist_id = p.playlist_id
-    WHERE p.playlist_name IS NOT NULL
+    LEFT JOIN {{ ref('dim_playlists') }} dp
+        ON pt.playlist_id = dp.playlist_id
+    WHERE dp.playlist_key IS NOT NULL
 ),
 
 plays_with_playlists AS (
     SELECT
         ap.*,
-        pr1.playlist_name AS playlist_1,
-        pr2.playlist_name AS playlist_2,
-        pr3.playlist_name AS playlist_3,
-        pr4.playlist_name AS playlist_4,
-        pr5.playlist_name AS playlist_5,
-        (SELECT COUNT(DISTINCT playlist_name) FROM playlist_rankings pr WHERE pr.play_id = ap.play_id) AS playlist_count
+        pr1.playlist_key AS playlist_key_1,
+        pr2.playlist_key AS playlist_key_2,
+        pr3.playlist_key AS playlist_key_3,
+        pr4.playlist_key AS playlist_key_4,
+        pr5.playlist_key AS playlist_key_5,
+        (SELECT COUNT(DISTINCT playlist_key) FROM playlist_rankings pr WHERE pr.play_id = ap.play_id) AS playlist_count
     FROM all_plays ap
     LEFT JOIN playlist_rankings pr1 ON ap.play_id = pr1.play_id AND pr1.playlist_rank = 1
     LEFT JOIN playlist_rankings pr2 ON ap.play_id = pr2.play_id AND pr2.playlist_rank = 2
     LEFT JOIN playlist_rankings pr3 ON ap.play_id = pr3.play_id AND pr3.playlist_rank = 3
     LEFT JOIN playlist_rankings pr4 ON ap.play_id = pr4.play_id AND pr4.playlist_rank = 4
     LEFT JOIN playlist_rankings pr5 ON ap.play_id = pr5.play_id AND pr5.playlist_rank = 5
+),
+
+plays_with_dimension_keys AS (
+    SELECT
+        pwp.*,
+        dt.track_key,
+        da.artist_key,
+        dal.album_key
+    FROM plays_with_playlists pwp
+    LEFT JOIN {{ ref('dim_tracks') }} dt
+        ON pwp.track_id = dt.track_id
+    LEFT JOIN {{ ref('dim_artists') }} da
+        ON pwp.artist_id = da.artist_id
+    LEFT JOIN {{ ref('dim_albums') }} dal
+        ON pwp.album_id = dal.album_id
+),
+
+plays_ordered AS (
+    SELECT
+        *,
+        -- Previous play information (for consecutive tracking) - using keys instead of IDs
+        LAG(played_at) OVER (ORDER BY played_at) AS prev_played_at,
+        LAG(played_date) OVER (ORDER BY played_at) AS prev_played_date,
+        LAG(track_key) OVER (ORDER BY played_at) AS prev_track_key,
+        LAG(artist_key) OVER (ORDER BY played_at) AS prev_artist_key,
+        -- Time gap between consecutive plays (in minutes)
+        EXTRACT(EPOCH FROM (played_at - LAG(played_at) OVER (ORDER BY played_at))) / 60.0 AS minutes_since_prev_play,
+        -- Session logic: new session if gap > 30 minutes or new day
+        CASE 
+            WHEN LAG(played_at) OVER (ORDER BY played_at) IS NULL THEN 1
+            WHEN EXTRACT(EPOCH FROM (played_at - LAG(played_at) OVER (ORDER BY played_at))) / 60.0 > 30 THEN 1
+            WHEN played_date != LAG(played_date) OVER (ORDER BY played_at) THEN 1
+            ELSE 0
+        END AS is_new_session
+    FROM plays_with_dimension_keys
+),
+
+plays_with_sessions AS (
+    SELECT
+        *,
+        -- Session number (increments when is_new_session = 1)
+        SUM(is_new_session) OVER (ORDER BY played_at ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS session_number
+    FROM plays_ordered
 )
 
 SELECT
-    pwp.play_id,
-    pwp.played_at,
-    pwp.played_at_cst,
-    pwp.played_date,
-    pwp.played_year,
-    pwp.played_month,
-    pwp.played_day,
-    pwp.played_hour AS played_hour_utc,
-    EXTRACT(HOUR FROM pwp.played_at_cst) AS played_hour_cst,
-    pwp.played_day_of_week,
-    pwp.played_day_name,
-    DAYNAME(pwp.played_at_cst) AS played_day_name_cst,
+    pws.play_id,
+    pws.played_at,
+    pws.played_at_cst,
+    pws.played_date,
+    pws.played_year,
+    pws.played_month,
+    pws.played_day,
+    pws.played_hour AS played_hour_utc,
+    EXTRACT(HOUR FROM pws.played_at_cst) AS played_hour_cst,
+    pws.played_day_of_week,
+    pws.played_day_name,
+    DAYNAME(pws.played_at_cst) AS played_day_name_cst,
     
-    -- Track information
-    pwp.track_id,
-    pwp.track_name,
-    pwp.duration_ms,
-    pwp.track_popularity,
-    pwp.explicit,
-    pwp.track_uri,
+    -- Dimension foreign keys (star schema design)
+    pws.track_key,
+    pws.artist_key,
+    pws.album_key,
+    pws.playlist_key_1,
+    pws.playlist_key_2,
+    pws.playlist_key_3,
+    pws.playlist_key_4,
+    pws.playlist_key_5,
+    pws.playlist_count,
     
-    -- Artist information
-    pwp.artist_id,
-    pwp.artist_name,
-    a.genres as artist_genres,
-    a.popularity as artist_popularity,
-    a.followers as artist_followers,
+    -- Track-level metrics (not stored in dimension)
+    pws.duration_ms,
+    pws.track_popularity,
+    pws.explicit,
+    pws.track_uri,
     
-    -- Album information
-    pwp.album_id,
-    pwp.album_name,
-    pwp.album_release_date,
-    pwp.album_release_year,
-    
-    -- Playlist information (separate columns for up to 5 playlists)
-    pwp.playlist_1,
-    pwp.playlist_2,
-    pwp.playlist_3,
-    pwp.playlist_4,
-    pwp.playlist_5,
-    pwp.playlist_count,
-    
-    -- Audio features
-    af.danceability,
-    af.energy,
-    af.key,
-    af.loudness,
-    af.mode,
-    af.mode_name,
-    af.speechiness,
-    af.acousticness,
-    af.instrumentalness,
-    af.liveness,
-    af.valence,
-    af.tempo,
-    af.time_signature,
-    af.mood_category,
+    -- Consecutive listening information
+    pws.prev_track_key,
+    pws.prev_artist_key,
+    pws.minutes_since_prev_play,
+    pws.is_new_session,
+    pws.session_number,
     
     -- Extended history context
-    pwp.data_source,
-    pwp.platform,
-    pwp.conn_country,
-    pwp.shuffle,
-    pwp.skipped,
-    pwp.reason_start,
-    pwp.reason_end,
+    pws.data_source,
+    pws.platform,
+    pws.conn_country,
+    pws.shuffle,
+    pws.skipped,
+    pws.reason_start,
+    pws.reason_end,
     
     -- Metadata
-    pwp.loaded_at
+    pws.loaded_at
 
-FROM plays_with_playlists pwp
-LEFT JOIN {{ ref('stg_spotify_audio_features') }} af
-    ON pwp.track_id = af.track_id
-LEFT JOIN {{ ref('stg_spotify_artists') }} a
-    ON pwp.artist_id = a.artist_id
+FROM plays_with_sessions pws

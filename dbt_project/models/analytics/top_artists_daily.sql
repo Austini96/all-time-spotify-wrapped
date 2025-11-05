@@ -4,26 +4,27 @@
 ) }}
 
 SELECT
-    played_date,
-    artist_id,
-    artist_name,
-    artist_genres,
+    f.played_date,
+    f.artist_key,
+    da.artist_id,
+    da.artist_name,
+    da.genres as artist_genres,
     COUNT(*) as play_count,
-    COUNT(DISTINCT track_id) as unique_tracks_played,
-    SUM(duration_ms) as total_listen_time_ms,
-    ROUND(SUM(duration_ms) / 60000.0, 2) as total_listen_time_minutes,
-    AVG(track_popularity) as avg_track_popularity,
-    AVG(energy) as avg_energy,
-    AVG(valence) as avg_valence,
-    AVG(danceability) as avg_danceability,
-    MAX(artist_followers) as artist_followers
+    COUNT(DISTINCT f.track_key) as unique_tracks_played,
+    SUM(f.duration_ms) as total_listen_time_ms,
+    ROUND(SUM(f.duration_ms) / 60000.0, 2) as total_listen_time_minutes,
+    AVG(f.track_popularity) as avg_track_popularity,
+    MAX(da.followers) as artist_followers
 
-FROM {{ ref('fct_listening_history') }}
+FROM {{ ref('fct_listening_history') }} f
+LEFT JOIN {{ ref('dim_artists') }} da
+    ON f.artist_key = da.artist_key
 GROUP BY 
-    played_date,
-    artist_id,
-    artist_name,
-    artist_genres
+    f.played_date,
+    f.artist_key,
+    da.artist_id,
+    da.artist_name,
+    da.genres
 ORDER BY 
-    played_date DESC,
+    f.played_date DESC,
     play_count DESC

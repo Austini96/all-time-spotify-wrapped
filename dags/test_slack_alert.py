@@ -10,47 +10,49 @@ from datetime import datetime, timedelta
 import os
 
 
-def alert_slack_channel(context):
-    """Alert to slack channel on failure"""
-    slack_webhook_url = os.getenv('SLACK_WEBHOOK_URL')
-    if not slack_webhook_url:
+def _send_slack_message(message):
+    """Helper function to send message to Slack"""
+    import requests
+    webhook_url = os.getenv('SLACK_WEBHOOK_URL')
+    if not webhook_url:
         print("⚠️  SLACK_WEBHOOK_URL not set - cannot send alert")
         return
     
-    last_task = context.get('task_instance')
-    dag_name = last_task.dag_id
-    task_name = last_task.task_id
-    error_message = context.get('exception') or context.get('reason')
-    execution_date = context.get('execution_date')
-    dag_run = context.get('dag_run')
-    task_instances = dag_run.get_task_instances()
-    file_and_link_template = "<{log_url}|{name}>"
-    failed_tis = [file_and_link_template.format(log_url=ti.log_url, name=ti.task_id)
-                    for ti in task_instances 
-                    if ti.state == 'failed']
-    
-    title = f":red_circle: Dag: *{dag_name}* has failed, with ({len(failed_tis)} tasks failed)"
-    msg_parts = {
-        'Execution date': execution_date,
-        'Failed Tasks': ', '.join(failed_tis),
-        'Error': error_message
-    }
-    msg = '\n'.join([title, *[f"*{key}*: {value}" for key, value in msg_parts.items()]]).strip()
-    
-    # Send to Slack using webhook URL directly
-    import requests
     try:
-        response = requests.post(
-            slack_webhook_url,
-            json={"text": msg},
-            headers={"Content-Type": "application/json"}
-        )
+        response = requests.post(webhook_url, json={"text": message}, headers={"Content-Type": "application/json"})
         if response.status_code == 200:
-            print(f"✅ Slack alert sent successfully!")
+            print(f"✅ Slack alert sent successfully")
         else:
-            print(f"⚠️  Slack alert failed: {response.status_code} - {response.text}")
+            print(f"⚠️  Slack alert failed: {response.status_code}")
     except Exception as e:
         print(f"❌ Error sending Slack alert: {e}")
+
+
+def alert_slack_channel(context):
+    """Send Slack notification when DAG fails after all retries"""
+    ti = context.get('task_instance')
+    dag_run = context.get('dag_run')
+    
+    failed_tasks = [f"<{task_ti.log_url}|{task_ti.task_id}>" for task_ti in dag_run.get_task_instances() if task_ti.state == 'failed']
+    error = context.get('exception') or context.get('reason')
+    
+    msg = f":red_circle: DAG *{ti.dag_id}* failed ({len(failed_tasks)} tasks)\n"
+    msg += f"*Execution*: {context.get('execution_date')}\n"
+    msg += f"*Failed Tasks*: {', '.join(failed_tasks)}\n"
+    msg += f"*Error*: {error}"
+    
+    _send_slack_message(msg)
+
+
+def alert_slack_retry(context):
+    """Send Slack notification when task is retrying"""
+    ti = context.get('task_instance')
+    
+    msg = f":warning: Task *{ti.dag_id}.{ti.task_id}* retrying (attempt {ti.try_number}/{ti.max_tries})\n"
+    msg += f"*Execution*: {context.get('execution_date')}\n"
+    msg += f"*Error*: {context.get('exception') or context.get('reason')}"
+    
+    _send_slack_message(msg)
 
 
 def task_that_succeeds():
@@ -72,15 +74,16 @@ def task_with_division_by_zero():
     return result
 
 
-# Default arguments with Slack alert on failure
+# Default arguments with Slack alert on failure and retry
 default_args = {
     'owner': 'airflow',
     'depends_on_past': False,
     'start_date': datetime(2024, 1, 1),
-    'on_failure_callback': alert_slack_channel,  # This triggers Slack on failure
+    'on_failure_callback': alert_slack_channel,  # Fires after all retries exhausted
+    'on_retry_callback': alert_slack_retry,      # Fires on each retry attempt
     'email_on_failure': False,
     'email_on_retry': False,
-    'retries': 0,  # Don't retry so we see the failure immediately
+    'retries': 2,  # Retry twice so you can test retry notifications
     'retry_delay': timedelta(minutes=1),
 }
 

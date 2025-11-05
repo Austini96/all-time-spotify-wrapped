@@ -11,75 +11,56 @@ from airflow.models import TaskInstance
 from airflow.lineage.entities import File
 from datetime import datetime, timedelta
 import sys
-import os
 
 # Add scripts to path
 sys.path.insert(0, '/opt/airflow/scripts')
 
+import os
 from spotify_extractor import extract_spotify_data
 from duckdb_loader import load_to_duckdb
 from utils import validate_env_vars
 from load_extended_history import load_extended_streaming_history
 
-def alert_slack_channel(context):
-    slack_webhook_url = os.getenv('SLACK_WEBHOOK_URL')
-    if not slack_webhook_url:
+
+def send_slack_alert(message):
+    import requests
+    webhook_url = os.getenv('SLACK_WEBHOOK_URL')
+    if not webhook_url:
         return
-    last_task = context.get('task_instance')
-    dag_name = last_task.dag_id
-    task_name = last_task.task_id
-    error_message = context.get('exception') or context.get('reason')
-    execution_date = context.get('execution_date')
+    
+    try:
+        response = requests.post(webhook_url, json={"text": message}, headers={"Content-Type": "application/json"})
+        if response.status_code == 200:
+            print(f"✅ Slack alert sent successfully")
+        else:
+            print(f"⚠️  Slack alert failed: {response.status_code}")
+    except Exception as e:
+        print(f"❌ Error sending Slack alert: {e}")
+
+
+def alert_slack_channel(context):
+    ti = context.get('task_instance')
     dag_run = context.get('dag_run')
-    task_instances = dag_run.get_task_instances()
-    file_and_link_template = "<{log_url}|{name}>"
-    failed_tis = [file_and_link_template.format(log_url=ti.log_url, name=ti.task_id)
-                    for ti in task_instances 
-                    if ti.state == 'failed']
-    title = f":red_circle: Dag: *{dag_name}* has failed, with ({len(failed_tis)} tasks failed)"
-    msg_parts = {
-        'Execution date': execution_date,
-        'Failed Tasks': ', '.join(failed_tis),
-        'Error': error_message
-    }
-    msg = '\n'.join([title, *[f"*{key}*: {value}" for key, value in msg_parts.items()]]).strip()
+    
+    failed_tasks = [f"<{task_ti.log_url}|{task_ti.task_id}>" for task_ti in dag_run.get_task_instances() if task_ti.state == 'failed']
+    error = context.get('exception') or context.get('reason')
+    
+    msg = f":red_circle: DAG *{ti.dag_id}* failed ({len(failed_tasks)} tasks)\n"
+    msg += f"*Execution*: {context.get('execution_date')}\n"
+    msg += f"*Failed Tasks*: {', '.join(failed_tasks)}\n"
+    msg += f"*Error*: {error}"
+    
+    send_slack_alert(msg)
 
 
 def alert_slack_retry(context):
-    slack_webhook_url = os.getenv('SLACK_WEBHOOK_URL')
-    if not slack_webhook_url:
-        return
-    last_task = context.get('task_instance')
-    dag_name = last_task.dag_id
-    task_name = last_task.task_id
-    try_number = context.get('task_instance').try_number
-    max_tries = context.get('task_instance').max_tries
-    error_message = context.get('exception') or context.get('reason')
-    execution_date = context.get('execution_date')
+    ti = context.get('task_instance')
     
-    title = f":warning: Task: *{dag_name}.{task_name}* is retrying (attempt {try_number}/{max_tries})"
-    msg_parts = {
-        'Execution date': execution_date,
-        'Task': task_name,
-        'Attempt': f"{try_number} of {max_tries}",
-        'Error': error_message
-    }
-    msg = '\n'.join([title, *[f"*{key}*: {value}" for key, value in msg_parts.items()]]).strip()
+    msg = f":warning: Task *{ti.dag_id}.{ti.task_id}* retrying (attempt {ti.try_number}/{ti.max_tries})\n"
+    msg += f"*Execution*: {context.get('execution_date')}\n"
+    msg += f"*Error*: {context.get('exception') or context.get('reason')}"
     
-    # Send to Slack using webhook URL directly
-    import requests
-    try:
-        response = requests.post(
-            slack_webhook_url,
-            json={"text": msg},
-            headers={"Content-Type": "application/json"}
-        )
-        if response.status_code == 200:
-            print(f"✅ Slack retry alert sent successfully!")
-        else:
-            print(f"⚠️  Slack retry alert failed: {response.status_code} - {response.text}")
-    except Exception as e:
-        print(f"❌ Error sending Slack retry alert: {e}")
+    send_slack_alert(msg)
 
 
 # Default arguments
@@ -99,9 +80,10 @@ default_args = {
 dag = DAG(
     'spotify_analytics_pipeline',
     default_args=default_args,
-    description='Extract Spotify data, load to DuckDB, transform with dbt',
-    schedule_interval='@hourly',  # Run every hour
+    description='Extract Spotify data, load to DuckDB, transform with dbt. Runs hourly 9 AM-3 PM CST and once at 9 PM CST.',
+    schedule_interval='0 15,16,17,18,19,20,21,3 * * *',  # 9 AM-3 PM CST hourly (15-21 UTC) and 9 PM CST (3 UTC)
     catchup=False,
+    max_active_runs=1,  # Prevent concurrent DAG runs to avoid DuckDB lock conflicts
     tags=['spotify', 'analytics', 'duckdb', 'dbt'],
 )
 

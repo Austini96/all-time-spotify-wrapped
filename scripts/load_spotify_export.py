@@ -90,7 +90,7 @@ def save_to_csv(df, output_file='data/raw/spotify_export_processed.csv'):
     return output_file
 
 
-def load_to_duckdb(df, db_path='data/duckdb/spotify.duckdb'):
+def load_to_duckdb(df, db_path='/opt/airflow/data/duckdb/spotify.duckdb'):
     conn = duckdb.connect(db_path)
     
     # Create table if not exists (similar to raw_spotify_tracks)

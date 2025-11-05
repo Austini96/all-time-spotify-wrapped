@@ -1,10 +1,7 @@
 # All-Time Spotify Wrapped
 
 ## Update Notes
-
-### 2025-10-21
-- **DuckDB + OpenLineage**: Updated automation of emitting column-level lineage to Marquez during dbt execution by using `openlineage-dbt` package and `dbt-ol run` to run the model instead of `dbt run`
-- **DuckDB + Metabase**: Metabase is now connecting directly to DuckDB using the [DuckDB driver](https://github.com/motherduckdb/metabase_duckdb_driver), eliminating the unnecessary work for PostgreSQL sync, thus simplifying the architecture.
+See the [Update Notes](Update%20Note.md) for recent changes and updates to the project.
 
 ## Overview
 A comprehensive data pipeline that extracts, transforms, and visualizes a user's complete Spotify listening history using modern data engineering tools and practices.
@@ -15,7 +12,7 @@ This project is built upon concepts from [spotify-api](https://github.com/calber
 
 ## Objective
 
-Deep dive into a my complete song listening history to analyze top artists, tracks, genres, listening patterns, and audio feature preferences. This project recreates "Spotify Wrapped" that can be viewed at any time of year with richer insights.
+Deep dive into a my complete song listening history to analyze top artists, tracks, genres, and extensive listening patterns. This project recreates "Spotify Wrapped" that can be viewed at any time of year with richer insights.
 
 **Key Features:**
 - **Real-time Tracking**: Hourly API calls during active hours (0-6, 14-23 UTC)
@@ -48,9 +45,9 @@ Deep dive into a my complete song listening history to analyze top artists, trac
 #### 1. **Extraction**
 - **API Extraction** (`extract_spotify_data`):
   - Calls Spotify API for recently played tracks (50 most recent)
-  - Fetches audio features, artist details, and playlist information
+  - Fetches artist details and playlist information
   - Saves responses as CSV files with timestamp
-  - Runs hourly during active hours (0-6, 14-23 UTC)
+  - Runs hourly during active hours (9AM - 3PM CST) and once on 9PM CST
 
 - **Extended History** (`load_extended_history`):
   - Requested Extended Streaming History data from [Spotify](https://www.spotify.com/us/account/privacy/)

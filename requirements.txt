@@ -11,7 +11,7 @@ requests==2.31.0
 apache-airflow-providers-slack==8.5.0
 
 # OpenLineage for data lineage tracking
-# DuckDB support added in openlineage-dbt 1.26.0
-openlineage-airflow==1.26.0
+# For Airflow 2.7+, use native provider instead of openlineage-airflow
+apache-airflow-providers-openlineage==1.7.0
 openlineage-python==1.26.0
 openlineage-dbt==1.26.0

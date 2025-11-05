@@ -4,27 +4,27 @@
 ) }}
 
 SELECT
-    played_date,
-    track_id,
-    track_name,
-    artist_name,
-    album_name,
+    f.played_date,
+    f.track_key,
+    dt.track_id,
+    dt.track_name,
+    dt.artist_name,
+    dt.album_name,
     COUNT(*) as play_count,
-    MAX(track_popularity) as track_popularity,
-    MAX(duration_ms) as duration_ms,
-    MAX(explicit) as explicit,
-    AVG(energy) as avg_energy,
-    AVG(valence) as avg_valence,
-    AVG(danceability) as avg_danceability,
-    MAX(mood_category) as mood_category
+    MAX(f.track_popularity) as track_popularity,
+    MAX(f.duration_ms) as duration_ms,
+    MAX(f.explicit) as explicit
 
-FROM {{ ref('fct_listening_history') }}
+FROM {{ ref('fct_listening_history') }} f
+LEFT JOIN {{ ref('dim_tracks') }} dt
+    ON f.track_key = dt.track_key
 GROUP BY 
-    played_date,
-    track_id,
-    track_name,
-    artist_name,
-    album_name
+    f.played_date,
+    f.track_key,
+    dt.track_id,
+    dt.track_name,
+    dt.artist_name,
+    dt.album_name
 ORDER BY 
-    played_date DESC,
+    f.played_date DESC,
     play_count DESC
