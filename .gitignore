@@ -29,12 +29,9 @@ dbt_project/target/
 dbt_project/dbt_packages/
 dbt_project/logs/
 
-# Data files
-data/raw/*.csv
-data/raw/*.json
-data/exports/*.csv
-data/exports/*.parquet
-data/extended_history/*.json
+# Data files - ignore entire data directory recursively
+data/**
+!data/.gitkeep
 Spotify Extended Streaming History/
 
 # Spotify authentication
