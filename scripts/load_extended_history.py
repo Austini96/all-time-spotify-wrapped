@@ -7,7 +7,7 @@ import glob
 import os
 import logging
 import pandas as pd
-from duckdb_connection import get_duckdb_connection
+import duckdb
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -32,10 +32,18 @@ def load_extended_streaming_history():
     
     logger.info(f"Found {len(json_files)} extended history files")
     
-    # Use single connection for check and load
-    with get_duckdb_connection(duckdb_path) as conn:
-        # Check if data already exists
-        try:
+    # Connect to DuckDB
+    conn = duckdb.connect(duckdb_path)
+    
+    try:
+        # Check if table exists and has data
+        table_exists = conn.execute("""
+            SELECT COUNT(*) 
+            FROM information_schema.tables 
+            WHERE table_name = 'raw_spotify_extended_history'
+        """).fetchone()[0] > 0
+        
+        if table_exists:
             result = conn.execute("""
                 SELECT COUNT(*) as count 
                 FROM raw_spotify_extended_history
@@ -45,9 +53,6 @@ def load_extended_streaming_history():
                 logger.info(f"Extended history already loaded ({result[0]:,} records)")
                 logger.info("Skipping load - data already exists")
                 return
-        except Exception:
-            # Table doesn't exist yet, continue
-            pass
         
         # Create raw extended history table
         conn.execute("""
@@ -102,7 +107,12 @@ def load_extended_streaming_history():
             # Convert to DataFrame for batch insert
             df = pd.DataFrame(music_data)
             
-            # Batch insert - MUCH FASTER than row-by-row
+            # Register DataFrame as temporary table to avoid DuckDB IndexError bug
+            # DuckDB's direct DataFrame handling (FROM df) has issues with certain DataFrame states,
+            # so registering it as a virtual table ensures reliable batch inserts
+            conn.register('temp_extended_history', df)
+            
+            # Batch insert from temporary table
             conn.execute("""
                 INSERT INTO raw_spotify_extended_history 
                 (ts, platform, ms_played, conn_country, ip_addr,
@@ -138,13 +148,18 @@ def load_extended_streaming_history():
                     offline_timestamp,
                     incognito_mode,
                     CURRENT_TIMESTAMP
-                FROM df
+                FROM temp_extended_history
             """)
+            
+            # Unregister temporary table to free memory
+            conn.unregister('temp_extended_history')
             
             total_records += len(music_data)
             logger.info(f"Loaded {len(music_data)} records from {os.path.basename(json_file)}")
         
         logger.info(f"Total records loaded: {total_records:,}")
+    finally:
+        conn.close()
 
 
 if __name__ == "__main__":

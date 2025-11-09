@@ -2,11 +2,9 @@
 
 ### 2025-11-09
 - **DuckDB Connection Management**: Implemented centralized DuckDB connection management to resolve concurrency lock issues
-  - Added `duckdb_connection.py` with context manager for safe connection handling
-  - Implemented retry logic with exponential backoff (3 attempts: 2s, 4s, 8s) for transient lock errors
-  - Updated all DuckDB scripts (`duckdb_loader.py`, `load_extended_history.py`, `load_spotify_export.py`) to use the connection manager
+  - Reconfigured Metabase to establish a read-only connection to DuckDB
   - Configured Airflow task pool (`duckdb_pool`) to serialize DuckDB tasks across DAG runs, preventing inter-process lock conflicts
-- **Batch Insert**: Optimized `load_extended_history.py` with batch inserts using pandas DataFrames (100x faster than row-by-row inserts)
+- **Batch Insert**: Optimized `load_extended_history.py` with batch inserts using pandas DataFrames
 
 ### 2025-11-05
 - **Removed audio feature related data**: Deleted 2 dbt models and 1 database table, removed 13 audio feature columns from dim_tracks as they are deprecated in Spotify API and have very limited use through third party APIs
