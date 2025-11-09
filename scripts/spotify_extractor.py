@@ -210,7 +210,6 @@ def extract_spotify_data():
         # Save tracks
         tracks_file = extractor.save_to_csv(tracks_df, 'spotify_tracks')
         result['tracks_file'] = tracks_file
-        logger.info(f"Saved {len(tracks_df)} tracks")
         
         # Extract artist information (may return empty DataFrame if unavailable)
         artist_ids = tracks_df['artist_id'].unique().tolist()
@@ -218,7 +217,6 @@ def extract_spotify_data():
         if not artists_df.empty:
             artists_file = extractor.save_to_csv(artists_df, 'spotify_artists')
             result['artists_file'] = artists_file
-            logger.info(f"Saved {len(artists_df)} artists")
         else:
             logger.warning("Artist info not available (skipped)")
             result['artists_file'] = None
@@ -228,7 +226,6 @@ def extract_spotify_data():
         if not playlists_df.empty:
             playlists_file = extractor.save_to_csv(playlists_df, 'spotify_playlists')
             result['playlists_file'] = playlists_file
-            logger.info(f"Saved {len(playlists_df)} playlists")
         else:
             logger.warning("Playlists not available (skipped)")
             result['playlists_file'] = None
@@ -236,19 +233,14 @@ def extract_spotify_data():
         if not playlist_tracks_df.empty:
             playlist_tracks_file = extractor.save_to_csv(playlist_tracks_df, 'spotify_playlist_tracks')
             result['playlist_tracks_file'] = playlist_tracks_file
-            logger.info(f"Saved {len(playlist_tracks_df)} playlist-track relationships")
         else:
             logger.warning("Playlist tracks not available (skipped)")
             result['playlist_tracks_file'] = None
         
         logger.info(f"Extraction complete: {sum(1 for v in result.values() if v)} of 4 data sources saved")
-        # Wait 30 seconds before proceeding
-        time.sleep(30)
         return result
     else:
         logger.warning("No tracks found")
-        # Wait 30 seconds before proceeding
-        time.sleep(30)
         return None
 
 

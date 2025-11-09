@@ -141,7 +141,19 @@ plays_ordered AS (
             WHEN EXTRACT(EPOCH FROM (played_at - LAG(played_at) OVER (ORDER BY played_at))) / 60.0 > 30 THEN 1
             WHEN played_date != LAG(played_date) OVER (ORDER BY played_at) THEN 1
             ELSE 0
-        END AS is_new_session
+        END AS is_new_session,
+        -- Repeat tracking: is this the same track as the previous play?
+        CASE 
+            WHEN LAG(track_id) OVER (ORDER BY played_at) IS NULL THEN FALSE
+            WHEN track_id = LAG(track_id) OVER (ORDER BY played_at) THEN TRUE
+            ELSE FALSE
+        END AS is_repeat,
+        -- Flag when a new track group starts (used for repeat sequence calculation)
+        CASE 
+            WHEN LAG(track_id) OVER (ORDER BY played_at) IS NULL THEN 1
+            WHEN track_id != LAG(track_id) OVER (ORDER BY played_at) THEN 1
+            ELSE 0
+        END AS is_new_track_group
     FROM plays_with_dimension_keys
 ),
 
@@ -149,8 +161,20 @@ plays_with_sessions AS (
     SELECT
         *,
         -- Session number (increments when is_new_session = 1)
-        SUM(is_new_session) OVER (ORDER BY played_at ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS session_number
+        SUM(is_new_session) OVER (ORDER BY played_at ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS session_number,
+        -- Track group number (increments when track changes)
+        SUM(is_new_track_group) OVER (ORDER BY played_at ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS track_group_number
     FROM plays_ordered
+),
+
+plays_with_repeat_sequence AS (
+    SELECT
+        *,
+        ROW_NUMBER() OVER (
+            PARTITION BY track_group_number 
+            ORDER BY played_at
+        ) - 1 AS repeat_sequence
+    FROM plays_with_sessions
 )
 
 SELECT
@@ -191,6 +215,10 @@ SELECT
     pws.is_new_session,
     pws.session_number,
     
+    -- Repeat tracking
+    pws.is_repeat,
+    pws.repeat_sequence,
+    
     -- Extended history context
     pws.data_source,
     pws.platform,
@@ -203,4 +231,4 @@ SELECT
     -- Metadata
     pws.loaded_at
 
-FROM plays_with_sessions pws
+FROM plays_with_repeat_sequence pws

@@ -4,11 +4,11 @@ Load Spotify Extended Streaming History Export into DuckDB
 
 import json
 import pandas as pd
-import duckdb
 import glob
 import os
 from pathlib import Path
 import logging
+from duckdb_connection import get_duckdb_connection
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -91,56 +91,53 @@ def save_to_csv(df, output_file='data/raw/spotify_export_processed.csv'):
 
 
 def load_to_duckdb(df, db_path='/opt/airflow/data/duckdb/spotify.duckdb'):
-    conn = duckdb.connect(db_path)
-    
-    # Create table if not exists (similar to raw_spotify_tracks)
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS raw_spotify_tracks_historical (
-            played_at TIMESTAMP,
-            track_id VARCHAR,
-            track_name VARCHAR,
-            artist_name VARCHAR,
-            album_name VARCHAR,
-            duration_ms INTEGER,
-            track_uri VARCHAR,
-            loaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            PRIMARY KEY (track_id, played_at)
-        )
-    """)
-    
-    # Count before
-    count_before = conn.execute(
-        "SELECT COUNT(*) FROM raw_spotify_tracks_historical"
-    ).fetchone()[0]
-    
-    # Insert data
-    conn.execute("""
-        INSERT INTO raw_spotify_tracks_historical
-        SELECT 
-            played_at::TIMESTAMP,
-            track_id,
-            track_name,
-            artist_name,
-            album_name,
-            duration_ms,
-            track_uri,
-            CURRENT_TIMESTAMP as loaded_at
-        FROM df
-        ON CONFLICT DO NOTHING
-    """)
-    
-    # Count after
-    count_after = conn.execute(
-        "SELECT COUNT(*) FROM raw_spotify_tracks_historical"
-    ).fetchone()[0]
-    
-    new_records = count_after - count_before
-    logger.info(f"Inserted {new_records:,} new historical records")
-    logger.info(f"Total historical records: {count_after:,}")
-
-    conn.close()
-    
-    return new_records
+    with get_duckdb_connection(db_path) as conn:
+        # Create table if not exists (similar to raw_spotify_tracks)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS raw_spotify_tracks_historical (
+                played_at TIMESTAMP,
+                track_id VARCHAR,
+                track_name VARCHAR,
+                artist_name VARCHAR,
+                album_name VARCHAR,
+                duration_ms INTEGER,
+                track_uri VARCHAR,
+                loaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (track_id, played_at)
+            )
+        """)
+        
+        # Count before
+        count_before = conn.execute(
+            "SELECT COUNT(*) FROM raw_spotify_tracks_historical"
+        ).fetchone()[0]
+        
+        # Insert data
+        conn.execute("""
+            INSERT INTO raw_spotify_tracks_historical
+            SELECT 
+                played_at::TIMESTAMP,
+                track_id,
+                track_name,
+                artist_name,
+                album_name,
+                duration_ms,
+                track_uri,
+                CURRENT_TIMESTAMP as loaded_at
+            FROM df
+            ON CONFLICT DO NOTHING
+        """)
+        
+        # Count after
+        count_after = conn.execute(
+            "SELECT COUNT(*) FROM raw_spotify_tracks_historical"
+        ).fetchone()[0]
+        
+        new_records = count_after - count_before
+        logger.info(f"Inserted {new_records:,} new historical records")
+        logger.info(f"Total historical records: {count_after:,}")
+        
+        return new_records
 
 
 def main():

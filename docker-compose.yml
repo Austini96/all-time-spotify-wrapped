@@ -94,6 +94,8 @@ services:
           --role Admin \
           --email admin@example.com \
           --password admin || echo "User already exists"
+        echo "Creating DuckDB pool..."
+        airflow pools set duckdb_pool 1 "Pool for DuckDB tasks to prevent concurrent access" || echo "Pool already exists"
         echo "Initialization complete!"
     environment:
       <<: *airflow-common-env

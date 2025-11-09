@@ -105,6 +105,8 @@ extract_data = PythonOperator(
 load_data = PythonOperator(
     task_id='load_to_duckdb',
     python_callable=load_to_duckdb,
+    pool='duckdb_pool',  # Ensure only one DuckDB task runs at a time
+    pool_slots=1,
     dag=dag,
 )
 
@@ -112,6 +114,8 @@ load_data = PythonOperator(
 load_extended = PythonOperator(
     task_id='load_extended_history',
     python_callable=load_extended_streaming_history,
+    pool='duckdb_pool',  # Ensure only one DuckDB task runs at a time
+    pool_slots=1,
     dag=dag,
 )
 
@@ -126,6 +130,8 @@ dbt_deps = BashOperator(
 dbt_run = BashOperator(
     task_id='dbt_run',
     bash_command='cd /opt/airflow/dbt_project && dbt-ol run --profiles-dir .',
+    pool='duckdb_pool',  # Ensure dbt doesn't conflict with loaders
+    pool_slots=1,
     dag=dag,
 )
 

@@ -66,6 +66,7 @@ Deep dive into a my complete song listening history to analyze top artists, trac
   1. `staging`: Silver data tables
   2. `marts`: Gold data models (Dimensional Modeling)
   3. `analytics`: analytical models from marts layer
+- `raw` tables are stored in raw/{category}/{year}/{month}/{date} structure
 
 #### 4. **Lineage Tracking**
 
@@ -111,7 +112,7 @@ This is a personal project for educational and analytical purposes. Spotify API 
 
 ## Acknowledgments
 
-- calbergs for the basic guideline of the project
+- calbergs for the basic idea of the project
 - Spotify for providing comprehensive Web API
 - Open-source communities behind Airflow, dbt, DuckDB, OpenLineage, and Marquez
 - Inspired by Spotify Wrapped
