@@ -1,5 +1,15 @@
 ## Update Notes
 
+### 2025-11-12
+- **DuckDB Connection Management**: Discovered that Metabase is the critical issue for the DuckDB concurrency connection issue. I reverted back the DuckDB connection method for simplicity of the code.
+- **Metabase Version Update**: Updated the Metabase version from v0.51.3 to v0.56.9
+- **Metabase Setting Configuration**: Updated the DuckDB connection to establish read-only connection
+- **Metabase Dockerfile Security Improvements**:
+  - Implemented non-root user security by running Metabase as `metabase` user instead of root
+  - Added entrypoint script (`docker-entrypoint-metabase.sh`) to fix volume permissions on startup
+  - Installed `gosu` for secure user switching in the entrypoint script
+  - Removed obsolete `version: '3.8'` from docker-compose.yml
+
 ### 2025-11-09
 - **DuckDB Connection Management**: Implemented centralized DuckDB connection management to resolve concurrency lock issues
   - Reconfigured Metabase to establish a read-only connection to DuckDB

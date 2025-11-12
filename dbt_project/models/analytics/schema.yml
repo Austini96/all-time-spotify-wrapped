@@ -48,6 +48,8 @@ models:
         description: "Track popularity score from Spotify (0-100)"
       - name: duration_ms
         description: "Track duration in milliseconds"
+      - name: first_played_date
+        description: "Date of the first play of this track"
       - name: explicit
         description: "Whether the track contains explicit content"
     

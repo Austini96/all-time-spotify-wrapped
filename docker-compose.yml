@@ -1,5 +1,3 @@
-version: '3.8'
-
 x-airflow-common:
   &airflow-common
   build: .
@@ -110,7 +108,7 @@ services:
       context: .
       dockerfile: Dockerfile.metabase
       args:
-        METABASE_VERSION: v0.51.3
+        METABASE_VERSION: 0.56.9
         METABASE_DUCKDB_DRIVER_VERSION: 1.4.1.0
     container_name: metabase
     ports:
@@ -118,7 +116,7 @@ services:
     environment:
       MB_DB_TYPE: h2
       MB_DB_FILE: /metabase-data/metabase.db
-      MB_PLUGINS_DIR: /plugins
+      MB_PLUGINS_DIR: /home/metabase/plugins/
     volumes:
       - ./data:/data
       - metabase-data:/metabase-data

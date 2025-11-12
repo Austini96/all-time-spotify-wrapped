@@ -13,6 +13,7 @@ SELECT
     COUNT(*) as play_count,
     MAX(f.track_popularity) as track_popularity,
     MAX(f.duration_ms) as duration_ms,
+    MIN(played_date) OVER(PARTITION BY f.track_key) AS first_played_date,
     MAX(f.explicit) as explicit
 
 FROM {{ ref('fct_listening_history') }} f
