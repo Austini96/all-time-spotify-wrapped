@@ -1,5 +1,9 @@
 """
 Spotify API data extraction module
+
+Supports two authentication methods:
+1. Airflow Connection (recommended) - credentials stored in Airflow's encrypted DB
+2. Environment variables (fallback) - for local development
 """
 
 import spotipy
@@ -7,43 +11,109 @@ from spotipy.oauth2 import SpotifyOAuth
 import pandas as pd
 from datetime import datetime
 import os
+import json
 import logging
 import time
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Spotify OAuth scopes needed
+SPOTIFY_SCOPES = 'user-read-recently-played user-top-read user-library-read playlist-read-private playlist-read-collaborative'
+
+
+def get_spotify_credentials():
+    """
+    Get Spotify credentials from Airflow Connection or environment variables.
+
+    Airflow Connection format (conn_id='spotify_oauth'):
+        - Login: client_id
+        - Password: client_secret
+        - Extra (JSON): {"redirect_uri": "...", "refresh_token": "..."}
+
+    Returns tuple: (client_id, client_secret, redirect_uri, refresh_token)
+    """
+    # Try Airflow Connection first (when running in Airflow)
+    try:
+        from airflow.hooks.base import BaseHook
+        conn = BaseHook.get_connection('spotify_oauth')
+
+        client_id = conn.login
+        client_secret = conn.password
+        extra = json.loads(conn.extra) if conn.extra else {}
+        redirect_uri = extra.get('redirect_uri', 'http://localhost:8888/callback')
+        refresh_token = extra.get('refresh_token')
+
+        logger.info("Using credentials from Airflow Connection 'spotify_oauth'")
+        return client_id, client_secret, redirect_uri, refresh_token
+
+    except Exception as e:
+        logger.debug(f"Airflow Connection not available: {e}")
+
+    # Fallback to environment variables (local development)
+    client_id = os.getenv('SPOTIFY_CLIENT_ID')
+    client_secret = os.getenv('SPOTIFY_CLIENT_SECRET')
+    redirect_uri = os.getenv('SPOTIFY_REDIRECT_URI', 'http://localhost:8888/callback')
+    refresh_token = os.getenv('SPOTIFY_REFRESH_TOKEN')
+
+    if not client_id or not client_secret:
+        raise ValueError(
+            "Spotify credentials not found. Set up Airflow Connection 'spotify_oauth' "
+            "or set SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET environment variables."
+        )
+
+    logger.info("Using credentials from environment variables")
+    return client_id, client_secret, redirect_uri, refresh_token
+
 
 class SpotifyExtractor:
+    """
+    Extracts data from Spotify API.
 
-    def __init__(self):
-        client_id = os.getenv('SPOTIFY_CLIENT_ID')
-        client_secret = os.getenv('SPOTIFY_CLIENT_SECRET')
-        redirect_uri = os.getenv('SPOTIFY_REDIRECT_URI')
-        cache_path = '/opt/airflow/data/.spotify_cache'
-        
-        # Check if cache exists
-        if not os.path.exists(cache_path):
-            logger.warning(
-                f"Spotify token cache not found at {cache_path}."
-            )
-        
-        self.sp = spotipy.Spotify(
-            auth_manager=SpotifyOAuth(
-                client_id=client_id,
-                client_secret=client_secret,
-                redirect_uri=redirect_uri,
-                scope='user-read-recently-played user-top-read user-library-read playlist-read-private playlist-read-collaborative',
-                cache_path=cache_path,
-                open_browser=False  # Disable browser in Airflow environment
-            )
+    Authentication priority:
+    1. Refresh token (if provided) - no browser needed
+    2. Token cache file - for backward compatibility
+    3. OAuth flow - requires browser (local only)
+    """
+
+    def __init__(self, client_id=None, client_secret=None, redirect_uri=None, refresh_token=None):
+        # Get credentials if not provided
+        if not client_id:
+            client_id, client_secret, redirect_uri, refresh_token = get_spotify_credentials()
+
+        cache_path = os.getenv('SPOTIFY_CACHE_PATH', '/opt/airflow/data/.spotify_cache')
+
+        # Create auth manager
+        auth_manager = SpotifyOAuth(
+            client_id=client_id,
+            client_secret=client_secret,
+            redirect_uri=redirect_uri,
+            scope=SPOTIFY_SCOPES,
+            cache_path=cache_path,
+            open_browser=False
         )
+
+        # If we have a refresh token, use it to get access token (no browser needed)
+        if refresh_token:
+            logger.info("Using refresh token for authentication")
+            try:
+                token_info = auth_manager.refresh_access_token(refresh_token)
+                auth_manager.cache_handler.save_token_to_cache(token_info)
+            except Exception as e:
+                logger.warning(f"Failed to use refresh token: {e}, falling back to cache")
+        elif not os.path.exists(cache_path):
+            logger.warning(
+                f"No refresh token and no cache at {cache_path}. "
+                "Run authenticate_spotify.py locally first."
+            )
+
+        self.sp = spotipy.Spotify(auth_manager=auth_manager)
+
         # Test the connection
-        is_authenticated = self.sp.current_user()
-        if not is_authenticated:
+        user = self.sp.current_user()
+        if not user:
             raise Exception("Failed to authenticate with Spotify")
-        else:
-            logger.info("Spotify client initialized and authenticated successfully")
+        logger.info(f"Authenticated as Spotify user: {user.get('display_name', user.get('id'))}")
     
     def get_recently_played(self, limit=50):
         results = self.sp.current_user_recently_played(limit=limit)
@@ -51,21 +121,32 @@ class SpotifyExtractor:
         
         for item in results['items']:
             track = item['track']
+            if not track:
+                continue
+
             played_at = item['played_at']
-            
+
+            # Safely extract artist info - some tracks may have no artists
+            artists = track.get('artists', [])
+            if not artists:
+                logger.warning(f"Track {track.get('id')} has no artists, skipping")
+                continue
+
+            primary_artist = artists[0]
+
             tracks_data.append({
                 'played_at': played_at,
                 'track_id': track['id'],
                 'track_name': track['name'],
-                'artist_id': track['artists'][0]['id'],
-                'artist_name': track['artists'][0]['name'],
-                'album_id': track['album']['id'],
-                'album_name': track['album']['name'],
-                'album_release_date': track['album'].get('release_date'),
-                'duration_ms': track['duration_ms'],
-                'popularity': track['popularity'],
-                'explicit': track['explicit'],
-                'track_uri': track['uri']
+                'artist_id': primary_artist.get('id'),
+                'artist_name': primary_artist.get('name'),
+                'album_id': track.get('album', {}).get('id'),
+                'album_name': track.get('album', {}).get('name'),
+                'album_release_date': track.get('album', {}).get('release_date'),
+                'duration_ms': track.get('duration_ms'),
+                'popularity': track.get('popularity'),
+                'explicit': track.get('explicit'),
+                'track_uri': track.get('uri')
             })
         
         df = pd.DataFrame(tracks_data)
@@ -200,28 +281,57 @@ class SpotifyExtractor:
 
 
 def extract_spotify_data():
-    extractor = SpotifyExtractor()
+    """
+    Extract data from Spotify API and save to CSV files.
+    Returns dict with file paths on success, None on failure.
+    """
+    try:
+        extractor = SpotifyExtractor()
+    except Exception as e:
+        logger.error(f"Failed to initialize Spotify client: {e}")
+        raise
+
     result = {}
-    
-    # Extract recently played tracks
-    tracks_df = extractor.get_recently_played(limit=50)
-    
-    if not tracks_df.empty:
+
+    try:
+        # Extract recently played tracks
+        tracks_df = extractor.get_recently_played(limit=50)
+    except Exception as e:
+        logger.error(f"Failed to get recently played tracks: {e}")
+        raise
+
+    if tracks_df.empty:
+        logger.warning("No tracks found")
+        return None
+
+    try:
         # Save tracks
         tracks_file = extractor.save_to_csv(tracks_df, 'spotify_tracks')
         result['tracks_file'] = tracks_file
-        
-        # Extract artist information (may return empty DataFrame if unavailable)
-        artist_ids = tracks_df['artist_id'].unique().tolist()
-        artists_df = extractor.get_artist_info(artist_ids)
-        if not artists_df.empty:
-            artists_file = extractor.save_to_csv(artists_df, 'spotify_artists')
-            result['artists_file'] = artists_file
+    except Exception as e:
+        logger.error(f"Failed to save tracks CSV: {e}")
+        raise
+
+    # Extract artist information (non-critical, continue on failure)
+    try:
+        artist_ids = tracks_df['artist_id'].dropna().unique().tolist()
+        if artist_ids:
+            artists_df = extractor.get_artist_info(artist_ids)
+            if not artists_df.empty:
+                artists_file = extractor.save_to_csv(artists_df, 'spotify_artists')
+                result['artists_file'] = artists_file
+            else:
+                logger.warning("Artist info not available (skipped)")
+                result['artists_file'] = None
         else:
-            logger.warning("Artist info not available (skipped)")
+            logger.warning("No artist IDs to fetch")
             result['artists_file'] = None
-        
-        # Extract playlist information
+    except Exception as e:
+        logger.warning(f"Failed to get artist info (non-critical): {e}")
+        result['artists_file'] = None
+
+    # Extract playlist information (non-critical, continue on failure)
+    try:
         playlists_df, playlist_tracks_df = extractor.get_user_playlists()
         if not playlists_df.empty:
             playlists_file = extractor.save_to_csv(playlists_df, 'spotify_playlists')
@@ -229,19 +339,20 @@ def extract_spotify_data():
         else:
             logger.warning("Playlists not available (skipped)")
             result['playlists_file'] = None
-        
+
         if not playlist_tracks_df.empty:
             playlist_tracks_file = extractor.save_to_csv(playlist_tracks_df, 'spotify_playlist_tracks')
             result['playlist_tracks_file'] = playlist_tracks_file
         else:
             logger.warning("Playlist tracks not available (skipped)")
             result['playlist_tracks_file'] = None
-        
-        logger.info(f"Extraction complete: {sum(1 for v in result.values() if v)} of 4 data sources saved")
-        return result
-    else:
-        logger.warning("No tracks found")
-        return None
+    except Exception as e:
+        logger.warning(f"Failed to get playlist info (non-critical): {e}")
+        result['playlists_file'] = None
+        result['playlist_tracks_file'] = None
+
+    logger.info(f"Extraction complete: {sum(1 for v in result.values() if v)} of 4 data sources saved")
+    return result
 
 
 if __name__ == "__main__":

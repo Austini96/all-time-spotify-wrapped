@@ -14,26 +14,34 @@ logger = logging.getLogger(__name__)
 
 
 def load_extended_streaming_history():
-    # Paths
-    extended_history_dir = '/opt/airflow/data/extended_history'
-    duckdb_path = '/opt/airflow/data/duckdb/spotify.duckdb'
-    
+    """
+    Load Spotify extended streaming history JSON files into DuckDB.
+    Skips if data already loaded. Returns early if no files found.
+    """
+    # Paths (use env vars with fallbacks)
+    extended_history_dir = os.getenv('EXTENDED_HISTORY_DIR', '/opt/airflow/data/extended_history')
+    duckdb_path = os.getenv('DUCKDB_PATH', '/opt/airflow/data/duckdb/spotify.duckdb')
+
     # Check if extended history directory exists
     if not os.path.exists(extended_history_dir):
-        logger.warning(f"Extended history directory not found: {extended_history_dir}")
+        logger.info(f"Extended history directory not found: {extended_history_dir} (this is OK if you haven't exported history)")
         return
-    
+
     # Find all JSON files
     json_files = glob.glob(f"{extended_history_dir}/Streaming_History_Audio_*.json")
-    
+
     if not json_files:
-        logger.warning(f"No streaming history JSON files found in {extended_history_dir}")
+        logger.info(f"No streaming history JSON files found in {extended_history_dir}")
         return
-    
+
     logger.info(f"Found {len(json_files)} extended history files")
-    
+
     # Connect to DuckDB
-    conn = duckdb.connect(duckdb_path)
+    try:
+        conn = duckdb.connect(duckdb_path)
+    except duckdb.Error as e:
+        logger.error(f"Failed to connect to DuckDB at {duckdb_path}: {e}")
+        raise
     
     try:
         # Check if table exists and has data
@@ -89,18 +97,25 @@ def load_extended_streaming_history():
         # Load each JSON file with batch inserts
         for json_file in sorted(json_files):
             logger.info(f"Loading {os.path.basename(json_file)}...")
-            
-            with open(json_file, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-            
+
+            try:
+                with open(json_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+            except json.JSONDecodeError as e:
+                logger.error(f"Invalid JSON in {json_file}: {e}")
+                continue  # Skip this file, try the next one
+            except IOError as e:
+                logger.error(f"Failed to read {json_file}: {e}")
+                continue
+
             # Filter out episodes and audiobooks (keep only music tracks)
             music_data = [
-                record for record in data 
+                record for record in data
                 if record.get('spotify_track_uri') and record['spotify_track_uri'].startswith('spotify:track:')
             ]
-            
+
             logger.info(f"Found {len(data)} total records, {len(music_data)} music tracks")
-            
+
             if not music_data:
                 continue
             

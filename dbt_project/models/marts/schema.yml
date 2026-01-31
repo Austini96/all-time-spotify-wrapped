@@ -11,6 +11,8 @@ models:
           - not_null
       - name: played_at
         description: "Timestamp when the track was played (UTC)"
+        tests:
+          - not_null
       - name: played_at_cst
         description: "Timestamp when the track was played (CST, UTC-6)"
       - name: played_date
@@ -23,20 +25,47 @@ models:
         description: "Day of month when the track was played (1-31)"
       - name: played_hour_utc
         description: "Hour when the track was played (UTC, 0-23)"
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 23
       - name: played_hour_cst
         description: "Hour when the track was played (CST, 0-23)"
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 23
       - name: played_day_of_week
         description: "Day of week when the track was played (0=Sunday, 6=Saturday)"
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 6
       - name: played_day_name
         description: "Name of the day when the track was played (UTC)"
       - name: played_day_name_cst
         description: "Name of the day when the track was played (CST)"
       - name: track_key
         description: "Foreign key to dim_tracks (preferred for joins)"
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_tracks')
+              field: track_key
       - name: artist_key
         description: "Foreign key to dim_artists (preferred for joins)"
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_artists')
+              field: artist_key
       - name: album_key
         description: "Foreign key to dim_albums (preferred for joins)"
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_albums')
+              field: album_key
       - name: playlist_key_1
         description: "Foreign key to dim_playlists for the first playlist containing this track"
       - name: playlist_key_2
@@ -53,6 +82,11 @@ models:
         description: "Track duration in milliseconds (event-level metric)"
       - name: track_popularity
         description: "Track popularity score from Spotify (0-100) at time of play"
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 100
+              where: "track_popularity IS NOT NULL"
       - name: explicit
         description: "Whether the track contains explicit content"
       - name: track_uri
@@ -69,6 +103,10 @@ models:
         description: "Sequential session number across all listening history"
       - name: data_source
         description: "Source of the data: 'api' for Spotify API or 'extended_history' for exported history"
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['api', 'extended_history']
       - name: platform
         description: "Platform where the track was played (from extended history)"
       - name: conn_country
@@ -112,10 +150,19 @@ models:
         description: "Track duration in milliseconds"
       - name: popularity
         description: "Track popularity score from Spotify (0-100)"
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 100
+              where: "popularity IS NOT NULL"
       - name: explicit
         description: "Whether the track contains explicit content"
       - name: total_plays
         description: "Total number of times this track was played"
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              inclusive: true
       - name: first_played_at
         description: "Timestamp of the first time this track was played"
       - name: last_played_at
@@ -128,6 +175,9 @@ models:
     columns:
       - name: artist_key
         description: "Surrogate key for artist dimension (sequential number)"
+        tests:
+          - unique
+          - not_null
       - name: artist_id
         description: "Spotify artist ID (natural key)"
         tests:
@@ -135,14 +185,29 @@ models:
           - not_null
       - name: artist_name
         description: "Name of the artist"
+        tests:
+          - not_null
       - name: genres
         description: "Comma-separated list of genres associated with the artist"
       - name: popularity
         description: "Artist popularity score from Spotify (0-100)"
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 100
+              where: "popularity IS NOT NULL"
       - name: followers
         description: "Number of followers the artist has on Spotify"
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              where: "followers IS NOT NULL"
       - name: total_plays
         description: "Total number of times tracks by this artist were played"
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              inclusive: true
       - name: unique_tracks_played
         description: "Number of distinct tracks by this artist that were played"
       - name: days_played
@@ -159,6 +224,9 @@ models:
     columns:
       - name: album_key
         description: "Surrogate key for album dimension (sequential number)"
+        tests:
+          - unique
+          - not_null
       - name: album_id
         description: "Spotify album ID (natural key)"
         tests:
@@ -166,12 +234,22 @@ models:
           - not_null
       - name: album_name
         description: "Name of the album"
+        tests:
+          - not_null
       - name: artist_id
         description: "Spotify artist ID"
+        tests:
+          - not_null
       - name: artist_name
         description: "Name of the primary artist"
+        tests:
+          - not_null
       - name: total_plays
         description: "Total number of times tracks from this album were played"
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              inclusive: true
       - name: unique_tracks_played
         description: "Number of distinct tracks from this album that were played"
       - name: days_played
@@ -186,8 +264,14 @@ models:
     columns:
       - name: playlist_key
         description: "Surrogate key for playlist dimension (sequential number)"
+        tests:
+          - unique
+          - not_null
       - name: playlist_sk
         description: "MD5 hash surrogate key for playlist"
+        tests:
+          - unique
+          - not_null
       - name: playlist_id
         description: "Spotify playlist ID (natural key)"
         tests:
@@ -195,6 +279,8 @@ models:
           - not_null
       - name: playlist_name
         description: "Name of the playlist"
+        tests:
+          - not_null
       - name: owner_id
         description: "Spotify user ID of the playlist owner"
       - name: is_owner

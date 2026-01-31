@@ -5,9 +5,16 @@ sources:
     description: "Raw Spotify data loaded into DuckDB"
     database: spotify
     schema: main
+    freshness:
+      warn_after: {count: 24, period: hour}
+      error_after: {count: 48, period: hour}
+    loaded_at_field: loaded_at
     tables:
       - name: raw_spotify_tracks
         description: "Raw track play history from Spotify API"
+        freshness:
+          warn_after: {count: 6, period: hour}
+          error_after: {count: 24, period: hour}
       - name: raw_spotify_artists
         description: "Raw artist information from Spotify API"
       - name: raw_spotify_playlists
@@ -16,6 +23,7 @@ sources:
         description: "Raw playlist-track relationships from Spotify API"
       - name: raw_spotify_extended_history
         description: "Extended streaming history from Spotify data export (2+ years)"
+        freshness: null  # Extended history is loaded once, not continuously
 
 models:
   - name: stg_spotify_tracks
@@ -54,6 +62,11 @@ models:
           - not_null
       - name: popularity
         description: "Track popularity score from Spotify (0-100)"
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 100
+              where: "popularity IS NOT NULL"
       - name: explicit
         description: "Whether the track contains explicit content"
       - name: track_uri
@@ -89,8 +102,17 @@ models:
         description: "Comma-separated list of genres associated with the artist"
       - name: popularity
         description: "Artist popularity score from Spotify (0-100)"
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 100
+              where: "popularity IS NOT NULL"
       - name: followers
         description: "Number of followers the artist has on Spotify"
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              where: "followers IS NOT NULL"
       - name: loaded_at
         description: "Timestamp when this record was loaded into the raw table"
 
@@ -160,6 +182,9 @@ models:
         description: "Milliseconds the track was played"
         tests:
           - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 86400000  # 24 hours max
       - name: conn_country
         description: "Country code where the connection originated (ISO 3166-1 alpha-2)"
         tests:

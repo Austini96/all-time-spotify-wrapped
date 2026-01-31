@@ -40,7 +40,8 @@ WITH api_plays AS (
 
 extended_plays AS (
     SELECT
-        ROW_NUMBER() OVER (ORDER BY played_at) + 1000000 as play_id,  -- Add offset to avoid conflicts
+        -- Generate surrogate key from track_id + played_at to avoid collision with API play_ids
+        {{ dbt_utils.generate_surrogate_key(['track_id', 'played_at']) }} as play_id,
         played_at,
         played_at - INTERVAL 6 HOURS AS played_at_cst,
         played_date,
@@ -80,34 +81,45 @@ all_plays AS (
     SELECT * FROM extended_plays
 ),
 
+-- Rank playlists for each play and pivot to columns in a single pass
 playlist_rankings AS (
     SELECT
         ap.play_id,
         dp.playlist_key,
         ROW_NUMBER() OVER (PARTITION BY ap.play_id ORDER BY pt.added_at DESC) as playlist_rank
     FROM all_plays ap
-    LEFT JOIN {{ ref('stg_spotify_playlist_tracks') }} pt
+    INNER JOIN {{ ref('stg_spotify_playlist_tracks') }} pt
         ON ap.track_id = pt.track_id
-    LEFT JOIN {{ ref('dim_playlists') }} dp
+    INNER JOIN {{ ref('dim_playlists') }} dp
         ON pt.playlist_id = dp.playlist_id
-    WHERE dp.playlist_key IS NOT NULL
+),
+
+-- Aggregate playlist keys into a single row per play using conditional aggregation
+-- This replaces 5 separate JOINs + correlated subquery with 1 GROUP BY
+playlist_pivot AS (
+    SELECT
+        play_id,
+        MAX(CASE WHEN playlist_rank = 1 THEN playlist_key END) AS playlist_key_1,
+        MAX(CASE WHEN playlist_rank = 2 THEN playlist_key END) AS playlist_key_2,
+        MAX(CASE WHEN playlist_rank = 3 THEN playlist_key END) AS playlist_key_3,
+        MAX(CASE WHEN playlist_rank = 4 THEN playlist_key END) AS playlist_key_4,
+        MAX(CASE WHEN playlist_rank = 5 THEN playlist_key END) AS playlist_key_5,
+        COUNT(DISTINCT playlist_key) AS playlist_count
+    FROM playlist_rankings
+    GROUP BY play_id
 ),
 
 plays_with_playlists AS (
     SELECT
         ap.*,
-        pr1.playlist_key AS playlist_key_1,
-        pr2.playlist_key AS playlist_key_2,
-        pr3.playlist_key AS playlist_key_3,
-        pr4.playlist_key AS playlist_key_4,
-        pr5.playlist_key AS playlist_key_5,
-        (SELECT COUNT(DISTINCT playlist_key) FROM playlist_rankings pr WHERE pr.play_id = ap.play_id) AS playlist_count
+        pp.playlist_key_1,
+        pp.playlist_key_2,
+        pp.playlist_key_3,
+        pp.playlist_key_4,
+        pp.playlist_key_5,
+        COALESCE(pp.playlist_count, 0) AS playlist_count
     FROM all_plays ap
-    LEFT JOIN playlist_rankings pr1 ON ap.play_id = pr1.play_id AND pr1.playlist_rank = 1
-    LEFT JOIN playlist_rankings pr2 ON ap.play_id = pr2.play_id AND pr2.playlist_rank = 2
-    LEFT JOIN playlist_rankings pr3 ON ap.play_id = pr3.play_id AND pr3.playlist_rank = 3
-    LEFT JOIN playlist_rankings pr4 ON ap.play_id = pr4.play_id AND pr4.playlist_rank = 4
-    LEFT JOIN playlist_rankings pr5 ON ap.play_id = pr5.play_id AND pr5.playlist_rank = 5
+    LEFT JOIN playlist_pivot pp ON ap.play_id = pp.play_id
 ),
 
 plays_with_dimension_keys AS (

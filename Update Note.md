@@ -1,5 +1,10 @@
 ## Update Notes
 
+### 2026-01-31
+- **SQL Injection Prevention (duckdb_loader.py)**: Added `validate_csv_path()` function for SQL injection prevention
+- **Authentication Improvement**: Updated the process to authenticate to Spotify API to use Airflow Connection instead of local cache
+- **Improved Data Quality Test**: ~70 dbt tests added including schema tests, custom tests, and freshness of the source
+
 ### 2025-11-12
 - **DuckDB Connection Management**: Discovered that Metabase is the critical issue for the DuckDB concurrency connection issue. I reverted back the DuckDB connection method for simplicity of the code.
 - **Metabase Version Update**: Updated the Metabase version from v0.51.3 to v0.56.9

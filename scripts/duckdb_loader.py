@@ -5,10 +5,35 @@ import duckdb
 import glob
 import os
 import logging
+import re
 from pathlib import Path
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+def validate_csv_path(file_path: str) -> str:
+    """
+    Validate and sanitize CSV file path to prevent SQL injection.
+    Returns the absolute path if valid, raises ValueError if invalid.
+    """
+    # Resolve to absolute path
+    abs_path = os.path.abspath(file_path)
+
+    # Check file exists
+    if not os.path.isfile(abs_path):
+        raise ValueError(f"File does not exist: {abs_path}")
+
+    # Check file extension
+    if not abs_path.lower().endswith('.csv'):
+        raise ValueError(f"File is not a CSV: {abs_path}")
+
+    # Check for SQL injection characters in path
+    # Allow only alphanumeric, underscore, hyphen, dot, forward slash
+    if not re.match(r'^[\w\-./]+$', abs_path):
+        raise ValueError(f"Invalid characters in file path: {abs_path}")
+
+    return abs_path
 
 
 class DuckDBLoader:
@@ -85,12 +110,15 @@ class DuckDBLoader:
         """)
     
     def load_tracks(self, csv_file):
+        # Validate path to prevent SQL injection
+        safe_path = validate_csv_path(csv_file)
+
         # Get count before insert
         count_before = self.conn.execute("SELECT COUNT(*) FROM raw_spotify_tracks").fetchone()[0]
 
         self.conn.execute(f"""
-            INSERT INTO raw_spotify_tracks 
-            SELECT 
+            INSERT INTO raw_spotify_tracks
+            SELECT
                 played_at::TIMESTAMP,
                 track_id,
                 track_name,
@@ -104,34 +132,38 @@ class DuckDBLoader:
                 explicit,
                 track_uri,
                 CURRENT_TIMESTAMP as loaded_at
-            FROM read_csv_auto('{csv_file}')
+            FROM read_csv_auto('{safe_path}')
             ON CONFLICT DO NOTHING
         """)
-        
+
         # Get count after insert to calculate difference
         count_after = self.conn.execute("SELECT COUNT(*) FROM raw_spotify_tracks").fetchone()[0]
         count = count_after - count_before
+        logger.info(f"Loaded {count} new tracks from {os.path.basename(safe_path)}")
     
     def load_artists(self, csv_file):
+        # Validate path to prevent SQL injection
+        safe_path = validate_csv_path(csv_file)
+
         # Check if file has data
-        row_count = self.conn.execute(f"SELECT COUNT(*) FROM read_csv_auto('{csv_file}')").fetchone()[0]
+        row_count = self.conn.execute(f"SELECT COUNT(*) FROM read_csv_auto('{safe_path}')").fetchone()[0]
         if row_count == 0:
-            logger.warning(f"Artists file is empty, skipping: {csv_file}")
+            logger.warning(f"Artists file is empty, skipping: {safe_path}")
             return
-        
+
         # Get count before insert
         count_before = self.conn.execute("SELECT COUNT(*) FROM raw_spotify_artists").fetchone()[0]
-        
+
         self.conn.execute(f"""
-            INSERT INTO raw_spotify_artists 
-            SELECT 
-                artist_id, 
-                artist_name, 
-                genres, 
-                popularity, 
-                followers, 
+            INSERT INTO raw_spotify_artists
+            SELECT
+                artist_id,
+                artist_name,
+                genres,
+                popularity,
+                followers,
                 now() as loaded_at
-            FROM read_csv_auto('{csv_file}')
+            FROM read_csv_auto('{safe_path}')
             ON CONFLICT (artist_id) DO UPDATE SET
                 artist_name = EXCLUDED.artist_name,
                 genres = EXCLUDED.genres,
@@ -139,35 +171,39 @@ class DuckDBLoader:
                 followers = EXCLUDED.followers,
                 loaded_at = now()
         """)
-        
+
         # Get count after insert to calculate difference
         count_after = self.conn.execute("SELECT COUNT(*) FROM raw_spotify_artists").fetchone()[0]
         count = count_after - count_before
+        logger.info(f"Loaded {count} new artists from {os.path.basename(safe_path)}")
     
     def load_playlists(self, csv_file):
+        # Validate path to prevent SQL injection
+        safe_path = validate_csv_path(csv_file)
+
         # Check if file is empty
-        if os.path.getsize(csv_file) == 0:
-            logger.warning(f"CSV file {csv_file} is empty, skipping...")
+        if os.path.getsize(safe_path) == 0:
+            logger.warning(f"CSV file {safe_path} is empty, skipping...")
             return
-        
+
         # Get count before insert
         count_before = self.conn.execute("SELECT COUNT(*) FROM raw_spotify_playlists").fetchone()[0]
-        
+
         self.conn.execute(f"""
-            INSERT INTO raw_spotify_playlists 
-            SELECT 
-                playlist_id, 
-                playlist_name, 
-                owner_id, 
-                is_owner, 
+            INSERT INTO raw_spotify_playlists
+            SELECT
+                playlist_id,
+                playlist_name,
+                owner_id,
+                is_owner,
                 is_public,
-                is_collaborative, 
-                total_tracks, 
-                description, 
+                is_collaborative,
+                total_tracks,
+                description,
                 snapshot_id,
                 extracted_at,
                 now() as loaded_at
-            FROM read_csv_auto('{csv_file}')
+            FROM read_csv_auto('{safe_path}')
             ON CONFLICT (playlist_id) DO UPDATE SET
                 playlist_name = EXCLUDED.playlist_name,
                 owner_id = EXCLUDED.owner_id,
@@ -180,40 +216,45 @@ class DuckDBLoader:
                 extracted_at = EXCLUDED.extracted_at,
                 loaded_at = now()
         """)
-        
+
         # Get count after insert to calculate difference
         count_after = self.conn.execute("SELECT COUNT(*) FROM raw_spotify_playlists").fetchone()[0]
         count = count_after - count_before
+        logger.info(f"Loaded {count} new playlists from {os.path.basename(safe_path)}")
     
     def load_playlist_tracks(self, csv_file):
+        # Validate path to prevent SQL injection
+        safe_path = validate_csv_path(csv_file)
+
         # Check if file is empty
-        if os.path.getsize(csv_file) == 0:
-            logger.warning(f"CSV file {csv_file} is empty, skipping...")
+        if os.path.getsize(safe_path) == 0:
+            logger.warning(f"CSV file {safe_path} is empty, skipping...")
             return
-        
+
         # Get count before insert
         count_before = self.conn.execute("SELECT COUNT(*) FROM raw_spotify_playlist_tracks").fetchone()[0]
-        
+
         self.conn.execute(f"""
-            INSERT INTO raw_spotify_playlist_tracks 
-            SELECT 
-                playlist_id, 
-                track_id, 
-                added_at, 
-                added_by, 
-                position, 
+            INSERT INTO raw_spotify_playlist_tracks
+            SELECT
+                playlist_id,
+                track_id,
+                added_at,
+                added_by,
+                position,
                 now() as loaded_at
-            FROM read_csv_auto('{csv_file}')
+            FROM read_csv_auto('{safe_path}')
             ON CONFLICT (playlist_id, track_id) DO UPDATE SET
                 added_at = EXCLUDED.added_at,
                 added_by = EXCLUDED.added_by,
                 position = EXCLUDED.position,
                 loaded_at = now()
         """)
-        
+
         # Get count after insert to calculate difference
         count_after = self.conn.execute("SELECT COUNT(*) FROM raw_spotify_playlist_tracks").fetchone()[0]
         count = count_after - count_before
+        logger.info(f"Loaded {count} new playlist tracks from {os.path.basename(safe_path)}")
     
     def load_latest_csv_files(self, data_dir='/opt/airflow/data/raw'):
         # Find latest files (search recursively in organized directory structure)
@@ -257,9 +298,27 @@ class DuckDBLoader:
 
 
 def load_to_duckdb():
-    loader = DuckDBLoader()
-    loader.load_latest_csv_files()
-    loader.close()
+    """
+    Load latest CSV files into DuckDB.
+    Raises exception on critical failures.
+    """
+    loader = None
+    try:
+        loader = DuckDBLoader()
+        loader.load_latest_csv_files()
+        logger.info("DuckDB load completed successfully")
+    except ValueError as e:
+        logger.error(f"Validation error during load: {e}")
+        raise
+    except duckdb.Error as e:
+        logger.error(f"DuckDB error during load: {e}")
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error during load: {e}")
+        raise
+    finally:
+        if loader:
+            loader.close()
 
 
 if __name__ == "__main__":

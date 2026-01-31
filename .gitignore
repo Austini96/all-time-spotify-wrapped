@@ -37,6 +37,7 @@ Spotify Extended Streaming History/
 # Spotify authentication
 .env
 .spotify_cache
+.spotify_setup_cache
 data/.spotify_cache
 *.cache
 scripts/authenticate_spotify.py
@@ -68,6 +69,9 @@ VIEWING_LINEAGE.md
 DUCKDB_CONCURRENCY_ANALYSIS.md
 FORMAT_ANALYSIS_AND_CONNECTION_MANAGEMENT.md
 DUCKDB_CONNECTION_EXPLANATION.md
+CLAUDE.md
+UPDATE.md
+Update Note.md
 
 # pptx files
 *.pptx

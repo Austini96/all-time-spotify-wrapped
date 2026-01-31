@@ -17,10 +17,7 @@ x-airflow-common:
     # Note: Airflow lineage backend disabled - using dbt-ol for lineage emission instead
     # dbt-ol configuration
     OPENLINEAGE_DBT_JOB_NAME: dbt_spotify_analytics
-    # Spotify API credentials
-    SPOTIFY_CLIENT_ID: ${SPOTIFY_CLIENT_ID}
-    SPOTIFY_CLIENT_SECRET: ${SPOTIFY_CLIENT_SECRET}
-    SPOTIFY_REDIRECT_URI: ${SPOTIFY_REDIRECT_URI}
+    # Spotify API credentials now stored in Airflow Connection 'spotify_oauth'
     # Slack alerts
     SLACK_WEBHOOK_URL: ${SLACK_WEBHOOK_URL}
   volumes:
